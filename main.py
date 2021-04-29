@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 
+from rdflib import Graph, Literal, URIRef, Namespace,XSD
+
 imdb_data_folder = 'imdb_data/'
 name_basics_file = 'name.basics.tsv'
 tconst_files = [
@@ -41,4 +43,47 @@ def data_loading():
     print(full_df)
 
 
-data_loading()
+def build_rdf():
+    movies = pd.read_csv('movies.csv')
+
+    ns1 = Namespace('http://example.org/ns/')
+    ns2 = Namespace('http://example.org/props/')
+
+    g = Graph()
+
+    for i in range(movies.shape[0]):
+        mov_id = movies['imdb_title_id'][i]
+        genres = movies['genre'][i].split(',')
+        # genres = [g.replace(' ', '_') for g in genres]
+        genres = [g.replace(' ', '') for g in genres]
+
+        a = URIRef(ns1 + mov_id)
+        b = URIRef(ns2 + 'genre')
+        for d in genres:
+            c = URIRef(ns1 + d)
+            # print(a, b, c)
+            g.add((a, b, c))
+
+    qres = g.query(
+        """SELECT DISTINCT ?x
+           WHERE {
+              ?x props:genre ns:Drama .
+           }""", initNs={'ns': ns1, 'props': ns2})
+
+    print(f'Results: {len(qres)}')
+    for row in qres:
+        print("%s has genre 'Drama'" % row)
+
+    qres = g.query(
+        """SELECT DISTINCT ?x
+           WHERE {
+              ?x props:genre ns:Drama .
+              ?x props:genre ns:Romance .
+           }""", initNs={'ns': ns1, 'props': ns2})
+
+    print(f'Results: {len(qres)}')
+    for row in qres:
+        print("%s has genre 'Drama' AND 'Romance'" % row)
+
+
+build_rdf()
