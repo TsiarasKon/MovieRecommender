@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
-from rdflib import Graph, Literal, URIRef, Namespace,XSD
+from rdflib import Graph, Literal, URIRef, Namespace, XSD
 
 imdb_data_folder = 'imdb_data/'
 name_basics_file = 'name.basics.tsv'
@@ -31,7 +32,8 @@ def data_loading():
     # combine all into one big fat DataFrame
     print('concatenating...')
     full_df = pd.concat(all_dfs, axis=1)
-    full_df = full_df[(full_df['startYear'] >= 1960) & (full_df['startYear'] <= 2020)]
+    full_df = full_df[(full_df['titleType'].isin(['tvMovie', 'movie'])) &
+                      (full_df['startYear'] >= 1960) & (full_df['startYear'] <= 2020)]
     print('done')
 
     # fix NA and types afterwards as it is not supported for read_csv
@@ -39,51 +41,51 @@ def data_loading():
     full_df['isAdult'] = full_df['isAdult'].astype(np.bool)
     full_df['startYear'] = full_df['startYear'].fillna(0).astype(np.uint16)
     full_df['endYear'] = full_df['endYear'].fillna(0).astype(np.uint16)
+    full_df['genres'] = full_df['genres'].fillna('').astype(np.str)
+
+    # filtering
+    full_df = full_df[(full_df['numVotes'] >= 500) &
+                      (~(full_df['genres'].str.contains('Short', regex=False, na=False))) &
+                      (full_df['genres'].str != '')]
 
     print(full_df)
+    return full_df
 
 
-def build_rdf():
-    movies = pd.read_csv('movies.csv')
+# def build_rdf():
+if __name__ == '__main__':
+    df = data_loading()
 
-    ns1 = Namespace('http://example.org/ns/')
-    ns2 = Namespace('http://example.org/props/')
+    ns_movies = Namespace('https://www.imdb.com/title/')
+    ns_predicates = Namespace('http://example.org/props/')
+    ns_xsd = Namespace('http://www.w3.org/2001/XMLSchema#')
 
     g = Graph()
 
-    for i in range(movies.shape[0]):
-        mov_id = movies['imdb_title_id'][i]
-        genres = movies['genre'][i].split(',')
-        # genres = [g.replace(' ', '_') for g in genres]
+    for imdb_id, data in tqdm(df.iterrows(), total=df.shape[0]):
+        movie = URIRef(ns_movies + imdb_id)
+
+        # add genres
+        has_genre = URIRef(ns_predicates + 'hasGenre')
+        genres = data['genres'].split(',')
         genres = [g.replace(' ', '') for g in genres]
+        for genre_str in genres:
+            genre = URIRef(ns_movies + genre_str)
+            g.add((movie, has_genre, genre))
 
-        a = URIRef(ns1 + mov_id)
-        b = URIRef(ns2 + 'genre')
-        for d in genres:
-            c = URIRef(ns1 + d)
-            # print(a, b, c)
-            g.add((a, b, c))
-
-    qres = g.query(
-        """SELECT DISTINCT ?x
-           WHERE {
-              ?x props:genre ns:Drama .
-           }""", initNs={'ns': ns1, 'props': ns2})
-
-    print(f'Results: {len(qres)}')
-    for row in qres:
-        print("%s has genre 'Drama'" % row)
+        # add years
+        year = Literal(str(data['startYear']), datatype=XSD.integer)
+        has_year = URIRef(ns_predicates + 'hasYear')
+        g.add((movie, has_year, year))
 
     qres = g.query(
         """SELECT DISTINCT ?x
            WHERE {
-              ?x props:genre ns:Drama .
-              ?x props:genre ns:Romance .
-           }""", initNs={'ns': ns1, 'props': ns2})
+              ?x pred:hasGenre ns:Drama .
+              ?x pred:hasYear 2003 .
+           }""", initNs={'ns': ns_movies, 'pred': ns_predicates})
 
     print(f'Results: {len(qres)}')
     for row in qres:
-        print("%s has genre 'Drama' AND 'Romance'" % row)
-
-
-build_rdf()
+        # print("%s has genre 'Drama'" % row)
+        print(row)
