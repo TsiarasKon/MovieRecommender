@@ -20,6 +20,7 @@ pd.set_option('display.max_columns', None)
 
 # NAMESPACES
 ns_movies = Namespace('https://www.imdb.com/title/')
+ns_genres = Namespace('https://www.imdb.com/search/title/?genres=')
 ns_principals = Namespace('https://www.imdb.com/name/')
 ns_predicates = Namespace('http://example.org/props/')
 
@@ -50,8 +51,8 @@ def data_loading():
 
     # filtering
     movies_df = movies_df[(movies_df['numVotes'] >= 500) &
-                      (~(movies_df['genres'].str.contains('Short', regex=False, na=False))) &
-                      (movies_df['genres'].str != '')]
+                          (~(movies_df['genres'].str.contains('Short', regex=False, na=False))) &
+                          (movies_df['genres'].str != '')]
 
     print('Loading edges')
     principals_df = pd.read_csv(imdb_data_folder + 'title.principals.tsv',
@@ -101,7 +102,7 @@ def build_and_save_rdf():
         genres = data['genres'].split(',')
         genres = [g.replace(' ', '') for g in genres]
         for genre_str in genres:
-            genre = URIRef(ns_movies + genre_str)
+            genre = URIRef(ns_genres + genre_str)
             g.add((movie, has_genre, genre))
 
         # add year
@@ -149,18 +150,28 @@ def load_rdf():
 
 
 if __name__ == '__main__':
-    print('Loading rdf...')
-    g = load_rdf()
-    print('done')
+    only_load = True    # load or build from scratch?
 
+    if only_load:
+        print('Loading rdf...')
+        g = load_rdf()
+        print('done')
+    else:
+        g = build_and_save_rdf()
+
+    # Test Query
     qres = g.query(
-        """SELECT DISTINCT ?x ?year
+        """SELECT DISTINCT ?x ?year ?director ?genre
            WHERE {
-              ?x pred:hasGenre ns:Comedy .
+              ?x pred:hasGenre ?genre .
               ?x pred:hasYear ?year .
+              ?x pred:hasDirector ?director .
               ?x pred:hasActor principals:nm0000120 .
               FILTER(?year >= 2010)
-           }""", initNs={'ns': ns_movies, 'pred': ns_predicates, 'principals': ns_principals})
+           }""", initNs={'movies': ns_movies,
+                         'genres': ns_genres,
+                         'pred': ns_predicates,
+                         'principals': ns_principals})
 
     print(f'Results: {len(qres)}')
     for row in qres:
