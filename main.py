@@ -4,6 +4,8 @@ from tqdm import tqdm
 
 from rdflib import Graph, Literal, URIRef, Namespace, XSD
 
+from wikidata_service import get_all_from_wikidata
+
 imdb_data_folder = 'imdb_data/'
 name_basics_file = 'name.basics.tsv'
 tconst_files = [
@@ -135,22 +137,24 @@ def build_and_save_rdf():
 
         # TODO: are info for artists useful for our task? Should we add such triples?
 
+    # TODO: create rdf graph from wikidata
+    # wikidata_df = get_all_from_wikidata(movies_df.index.tolist())
+    # print(wikidata_df)
+
     # Save graph
     print('Saving graph...')
     g.serialize(destination='movies.nt', format='nt')
-
-    # To load: g.parse('movies.nt',format='nt')
 
     return g
 
 
 def load_rdf():
     g = Graph()
-    return g.parse('movies.nt',format='nt')
+    return g.parse('movies.nt', format='nt')
 
 
 if __name__ == '__main__':
-    only_load = True    # load or build from scratch?
+    only_load = False    # load or build from scratch?
 
     if only_load:
         print('Loading rdf...')
