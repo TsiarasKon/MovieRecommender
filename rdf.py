@@ -166,8 +166,7 @@ if __name__ == '__main__':
     # Test Query
     qres = g.query(
         """SELECT DISTINCT ?x ?year ?director ?genre
-           WHERE {
-              ?x pred:hasGenre ?genre .
+           WHERE {              ?x pred:hasGenre ?genre .
               ?x pred:hasYear ?year .
               ?x pred:hasDirector ?director .
               ?x pred:hasActor principals:nm0000120 .
