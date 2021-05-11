@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.preprocessing import MultiLabelBinarizer
 from rdflib import Graph
 from tqdm import tqdm
+import warnings
 
 from rdf import ns_movies, ns_genres, ns_predicates, ns_principals, load_rdf
 
@@ -14,36 +15,47 @@ def extract_binary_features(actual_values: set, ordered_possible_values: list) -
     return binary_format
 
 
-def build_items_feature_vetors(rdf: Graph) -> (list, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
+def build_items_feature_vetors(rdf: Graph) -> (np.array, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
     """ Builds a feature vector for each movie """
     # get all possible categorical features
+    print('Looking up genres...')
     all_genres = rdf.query(
         """ SELECT DISTINCT ?genre
             WHERE {
                 ?movie pred:hasGenre ?genre . 
             }""", initNs={'pred': ns_predicates})
-    all_genres = sorted([str(g['genre']) for g in all_genres])
-    # print(all_genres)
+    all_genres = sorted([str(g['genre']) for g in all_genres if len(str(g['genre']).split('=')[-1]) > 0])
+    print('Found', len(all_genres), 'genres.')
 
-    # TODO: Ignore insignificant actors somehow?
+    print('Looking up actors...')
+    LEAST_MOVIES = 10    # Ignore insignificant actors
     all_actors = rdf.query(
         """ SELECT DISTINCT ?actor
             WHERE {
                 ?movie pred:hasActor ?actor . 
-            }""", initNs={'pred': ns_predicates})
+            } 
+            GROUP BY ?actor 
+            HAVING (COUNT(?movie) > """ + str(LEAST_MOVIES) + ')',
+        initNs={'pred': ns_predicates})
     all_actors = sorted([str(a['actor']) for a in all_actors])
     # Note: keep just the id with: actors = sorted([str(a['actor']).split('/')[-1] for a in actors])
-    # print(all_actors)
+    print('Found', len(all_actors), 'actors with at least', LEAST_MOVIES, 'movies made.')
 
+    print('Looking up directors...')
+    LEAST_MOVIES2 = 10
     all_directors = rdf.query(
         """ SELECT DISTINCT ?director
             WHERE {
                 ?movie pred:hasDirector ?director . 
-            }""", initNs={'pred': ns_predicates})
+            }
+            GROUP BY ?director
+            HAVING (COUNT(?movie) > """ + str(LEAST_MOVIES2) + ')',
+        initNs={'pred': ns_predicates})
     all_directors = sorted([str(d['director']) for d in all_directors])
-    # print(all_directors)
+    print('Found', len(all_directors), 'directors.')
 
     # Query all movies on rdf and their associated features
+    print('Querying movie features...')
     movies = rdf.query(
         """SELECT DISTINCT ?movie ?year ?rating
               (group_concat(distinct ?genre; separator=",") as ?genres)
@@ -56,17 +68,18 @@ def build_items_feature_vetors(rdf: Graph) -> (list, np.array):   # list paralle
               ?movie pred:hasDirector ?director .
               ?movie pred:hasActor ?actor .
            } 
-           GROUP BY ?movie ?year ?rating
-           LIMIT 10""",   # TODO: remove LIMIT
+           GROUP BY ?movie ?year ?rating""",
         initNs={'movies': ns_movies,
                 'genres': ns_genres,
                 'pred': ns_predicates,
                 'principals': ns_principals})
+    print('Done.')
 
     NUM_FEATURES = 2 + len(all_genres) + len(all_actors) + len(all_directors)  # TODO
-    movie_ids: [str] = [''] * len(movies)
+    movie_ids: [str] = np.zeros(len(movies), dtype=object)
     item_features = np.zeros((len(movies), NUM_FEATURES), dtype=np.float32)
 
+    print('Creating item feature matrix...')
     for i, movie_data in tqdm(enumerate(movies), total=len(movies)):
         # add movie_id to parallel vector
         movie_ids[i] = movie_data['movie']
@@ -79,9 +92,12 @@ def build_items_feature_vetors(rdf: Graph) -> (list, np.array):   # list paralle
         genres = set(movie_data['genres'].split(','))
         actors = set(movie_data['actors'].split(','))
         directors = set(movie_data['directors'].split(','))
-        genres_feat = extract_binary_features(genres, all_genres)
-        actors_feat = extract_binary_features(actors, all_actors)
-        directors_feat = extract_binary_features(directors, all_directors)
+        with warnings.catch_warnings():
+            # hide user warnings about ignoredmissing values, ignoring these values is the desired behaviour
+            warnings.simplefilter("ignore")
+            genres_feat = extract_binary_features(genres, all_genres)
+            actors_feat = extract_binary_features(actors, all_actors)
+            directors_feat = extract_binary_features(directors, all_directors)
 
         # TODO (EXTRA): Add a different weight to each feature with which to experiment "balancing"?  How do we change this afterwards? Must also store it?
         pass
@@ -92,8 +108,8 @@ def build_items_feature_vetors(rdf: Graph) -> (list, np.array):   # list paralle
         item_features[i, 2: 2 + len(all_genres)] = genres_feat
         item_features[i, 2 + len(all_genres): 2 + len(all_genres) + len(all_actors)] = actors_feat
         item_features[i, 2 + len(all_genres) + len(all_actors):] = directors_feat
-        print(item_features[i])
 
+    print('Done.')
     # TODO: save the result?
 
     return movie_ids, item_features
