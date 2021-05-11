@@ -84,12 +84,12 @@ def data_loading():
     return movies_df, principals_df
 
 
-def build_and_save_rdf():
+def build_and_save_rdf(save=True, limit=None):
     movies_df, principals_df = data_loading()
 
     g = Graph()
 
-    for imdb_id, data in tqdm(movies_df.iterrows(), total=movies_df.shape[0]):
+    for imdb_id, data in tqdm(movies_df.iterrows(), total=movies_df.shape[0] if limit is None else min(movies_df.shape[0], limit)):
         movie = URIRef(ns_movies + imdb_id)
 
         # find artists involved
@@ -142,8 +142,9 @@ def build_and_save_rdf():
     # print(wikidata_df)
 
     # Save graph
-    print('Saving graph...')
-    g.serialize(destination='movies.nt', format='nt')
+    if save:
+        print('Saving graph...')
+        g.serialize(destination='movies.nt', format='nt')
 
     return g
 
@@ -154,13 +155,14 @@ def load_rdf():
 
 
 if __name__ == '__main__':
-    only_load = False    # load or build from scratch?
+    only_load = True    # load or build from scratch?
 
     if only_load:
         print('Loading rdf...')
         g = load_rdf()
         print('done')
     else:
+        # g = build_and_save_rdf(save=False, limit=10)
         g = build_and_save_rdf()
 
     # Test Query
