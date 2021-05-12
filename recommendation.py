@@ -1,3 +1,4 @@
+import random
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -8,6 +9,9 @@ import warnings
 from rdf import ns_movies, ns_genres, ns_predicates, ns_principals, load_rdf
 
 
+movielens_data_folder = 'movielens_data/'
+
+
 def extract_binary_features(actual_values: set, ordered_possible_values: list) -> np.array:
     """ Converts a categorical feature with multiple values to a multi-label binary encoding """
     mlb = MultiLabelBinarizer(classes=ordered_possible_values)
@@ -15,7 +19,7 @@ def extract_binary_features(actual_values: set, ordered_possible_values: list) -
     return binary_format
 
 
-def build_items_feature_vetors(rdf: Graph) -> (np.array, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
+def build_items_feature_vetors(rdf: Graph) -> (dict, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
     """ Builds a feature vector for each movie """
     # get all possible categorical features
     print('Looking up genres...')
@@ -52,7 +56,7 @@ def build_items_feature_vetors(rdf: Graph) -> (np.array, np.array):   # list par
             HAVING (COUNT(?movie) > """ + str(LEAST_MOVIES2) + ')',
         initNs={'pred': ns_predicates})
     all_directors = sorted([str(d['director']) for d in all_directors])
-    print('Found', len(all_directors), 'directors.')
+    print('Found', len(all_directors), 'directors with at least', LEAST_MOVIES2, 'movies directed.')
 
     # Query all movies on rdf and their associated features
     print('Querying movie features...')
@@ -76,13 +80,13 @@ def build_items_feature_vetors(rdf: Graph) -> (np.array, np.array):   # list par
     print('Done.')
 
     NUM_FEATURES = 2 + len(all_genres) + len(all_actors) + len(all_directors)  # TODO
-    movie_ids: [str] = np.zeros(len(movies), dtype=object)
+    movie_pos: dict = {}
     item_features = np.zeros((len(movies), NUM_FEATURES), dtype=np.float32)
 
     print('Creating item feature matrix...')
     for i, movie_data in tqdm(enumerate(movies), total=len(movies)):
         # add movie_id to parallel vector
-        movie_ids[i] = movie_data['movie']
+        movie_pos[movie_data['movie'].split('/')[-1]] = i   # dict with position in item_features
 
         # get numerical features
         rating = float(movie_data['rating'])
@@ -112,19 +116,31 @@ def build_items_feature_vetors(rdf: Graph) -> (np.array, np.array):   # list par
     print('Done.')
     # TODO: save the result?
 
-    return movie_ids, item_features
+    return movie_pos, item_features
 
 
-def build_user_feature_vector(rdf: Graph, user_ratings: dict, item_features: np.array or pd.DataFrame):
+def build_user_feature_vector(user_ratings: dict, movie_pos: dict, item_features: np.array or pd.DataFrame):
     """ Takes as input a user's ratings on IMDb titles and construct its user vector """
-    # TODO: Query all the movies that the user has rated
-    # TODO: Get their feature vectors as saved from earlier
-    # TODO: Aggregate all these feature vectors to create the user's feature vector
-    #       Find the average rating the user gives and subtract it in order to have positive and negative normalized features (~ see MMD again for this process)
-    pass
+    avg_rating = 2.5    # TODO: use this as average or a user average? Or maybe the minimum of the two?
+    normalize_by = 1.0  # min(5.0 - avg_rating, avg_rating - 0.0)  # TODO
+    user_vector = np.zeros(item_features.shape[1], dtype=np.float64)
+    missing = 0
+    for movie_id, rating in user_ratings.items():
+        try:
+            pos = movie_pos[movie_id]
+            user_vector += ((rating - avg_rating) / normalize_by) * item_features[pos, :]
+        except KeyError:
+            missing += 1
+    # take the average TODO: does this average make any sense?
+    user_vector /= (len(user_ratings) - missing)
+    # manually overwrite the first feature to be 5.0 as the desired IMDb rating (TODO)
+    user_vector[0] = 5.0
+    if missing > 0:
+        print(f'Warning: {missing} movies out of {len(user_ratings)} were missing.')
+    return user_vector
 
 
-def recommend_movies(user_vector, item_features: np.array or pd.DataFrame, top_K=None, threshold=None):
+def recommend_movies(user_features, item_features: np.array or pd.DataFrame, top_K=None, threshold=None):
     """ Calculates cosine similarity or cosine distance between the user's feature vector and
         ALL item feature vectors, then orders items based on it. Suggest the most similar movies.
         LSH is typically used to speed this up. """
@@ -135,11 +151,50 @@ def recommend_movies(user_vector, item_features: np.array or pd.DataFrame, top_K
     pass
 
 
+def load_user_ratings():
+    # load movielens user reviews data
+    user_ratings = pd.read_csv(movielens_data_folder + 'ratings.csv',
+                               usecols=['userId', 'movieId', 'rating'],
+                               dtype={'userId': np.int32, 'movieId': np.int32, 'rating': np.float32})
+    # link movieIds with imdbIds
+    links = pd.read_csv(movielens_data_folder + 'links.csv',
+                        index_col='movieId',
+                        usecols=['movieId', 'imdbId'],
+                        dtype={'movieId': np.int32, 'imdbId': 'string'})
+    user_ratings['movieId'] = 'tt' + user_ratings['movieId'].map(links['imdbId'])
+    return user_ratings
+
+
+def create_user_rating_dict(user_ratings: pd.DataFrame):
+    r = {}
+    for _, user_rating in user_ratings.iterrows():
+        r[user_rating['movieId']] = user_rating['rating']
+    return r
+
+
 if __name__ == '__main__':
     # load rdf
     print('Loading rdf...')
     rdf = load_rdf()
     print('done')
 
-    movie_ids, item_features = build_items_feature_vetors(rdf)
-    print(movie_ids, item_features)
+    # extract item features
+    movie_pos, item_features = build_items_feature_vetors(rdf)
+    print(movie_pos, '\n', item_features)
+
+    # load movieLens user ratings
+    print('Loading movieLens user ratings...')
+    user_ratings = load_user_ratings()
+    print('Done')
+
+    # keep a random user
+    random.seed(0)   # TODO
+    user_ratings = user_ratings[user_ratings['userId'] == random.randint(user_ratings['userId'].min(), user_ratings['userId'].max())]
+    user_rating = create_user_rating_dict(user_ratings)
+
+    # build user feature vector
+    user_features = build_user_feature_vector(user_rating, movie_pos, item_features)
+    print(user_features)
+
+    # make recommendations
+    recommend_movies(user_features, item_features, top_K=10)
