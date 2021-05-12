@@ -90,7 +90,7 @@ def build_items_feature_vetors(rdf: Graph) -> (dict, np.array):   # list paralle
 
         # get numerical features
         rating = float(movie_data['rating'])
-        year = float(movie_data['year'])     # TODO: add a factor?
+        year = float(movie_data['year']) / 1000     # TODO: add a factor?
 
         # Convert all categorical to binary format
         genres = set(movie_data['genres'].split(','))
@@ -125,16 +125,24 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: dict, item_features
     normalize_by = 1.0  # min(5.0 - avg_rating, avg_rating - 0.0)  # TODO
     user_vector = np.zeros(item_features.shape[1], dtype=np.float64)
     missing = 0
+    count = 0
     for movie_id, rating in user_ratings.items():
         try:
             pos = movie_pos[movie_id]
-            user_vector += ((rating - avg_rating) / normalize_by) * item_features[pos, :]
+            # TODO: add weights?
+            # take the normal average for numerical features
+            user_vector[:2] += item_features[pos, :2]
+            # use weights based on rating for categorical features
+            user_vector[2:] += ((rating - avg_rating) / normalize_by) * item_features[pos, 2:]
+            count += 1
         except KeyError:
             missing += 1
     # take the average TODO: does this average make any sense?
-    user_vector /= (len(user_ratings) - missing)
+    user_vector /= count
     # manually overwrite the first feature to be 5.0 as the desired IMDb rating (TODO)
-    user_vector[0] = 5.0
+    user_vector[0] = 10.0
+    # clip vector to maximum 1 and minimum -1 to optimize cosine similarity (TODO)
+    user_vector[2:] = np.clip(user_vector[2:], -1.0, 1.0)
     if missing > 0:
         print(f'Warning: {missing} movies out of {len(user_ratings)} were missing.')
     return user_vector
@@ -144,11 +152,16 @@ def recommend_movies(user_features, item_features: np.array or pd.DataFrame, top
     """ Calculates cosine similarity or cosine distance between the user's feature vector and
         ALL item feature vectors, then orders items based on it. Suggest the most similar movies.
         LSH is typically used to speed this up. """
-    # TODO: calculate cosine similarity or distance between the user's vector and all the movies' vectors
+    # TODO: calculate cosine similarity or distance between the user's vector and all the movies' vectors. Does this work?
+    cos_sim = np.zeros(item_features.shape[0], dtype=np.float64)
+    cos_sim = user_features @ item_features.T         # takes dot product between each item vector and the user vector
+    cos_sim /= np.linalg.norm(user_features)          # normalize by the magnitude of user vector
+    cos_sim /= np.linalg.norm(item_features, axis=1)  # normalize by the magnitude of item vectors respectively
+    print(cos_sim)
     # TODO: order by similarity/distance
     # TODO: return topK most similar or those above/below a threshold
     # TODO (EXTRA): Can we speed this up with black-box LSH or something?
-    pass
+    return cos_sim
 
 
 def load_user_ratings():
@@ -180,7 +193,7 @@ if __name__ == '__main__':
 
     # extract item features
     movie_pos, item_features = build_items_feature_vetors(rdf)
-    print(movie_pos, '\n', item_features)
+    print(item_features)
 
     # load movieLens user ratings
     print('Loading movieLens user ratings...')
@@ -197,4 +210,5 @@ if __name__ == '__main__':
     print(user_features)
 
     # make recommendations
-    recommend_movies(user_features, item_features, top_K=10)
+    cos_sim = recommend_movies(user_features, item_features, top_K=10)
+    print('min:', min(cos_sim), 'max:', max(cos_sim))
