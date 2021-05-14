@@ -155,7 +155,7 @@ def load_rdf():
 
 
 if __name__ == '__main__':
-    only_load = True    # load or build from scratch?
+    only_load = False    # load or build from scratch?
 
     if only_load:
         print('Loading rdf...')

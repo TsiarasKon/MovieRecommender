@@ -15,14 +15,18 @@ def response_to_df(response_list):
     movielabel_list = []        # TODO: remove?
     series_list = []
     distributors_list = []
-    boxoffice_list = []        # TODO: remove due to multiple values - unreliable?
+    subject_list = []
+    boxoffice_list = []        # TODO: keep max?
     for entity in response_list:
+        if not entity['series']['value'] and not entity['distributors']['value'] and not entity['subject']['value'] and not entity['boxoffice']['value']:
+            continue
         movieid_list.append(entity['movieid']['value'])
         movielabel_list.append(entity['movieLabel']['value'])
         series_list.append(entity['series']['value'])
         distributors_list.append(entity['distributors']['value'])
+        subject_list.append(entity['subject']['value'])
         boxoffice_list.append(entity['boxoffice']['value'])
-    return pd.DataFrame({'tconst': movieid_list, 'movie': movielabel_list, 'series': series_list, 'distributors': distributors_list, 'boxoffice': boxoffice_list})
+    return pd.DataFrame({'tconst': movieid_list, 'movie': movielabel_list, 'series': series_list, 'distributors': distributors_list, 'boxoffice': boxoffice_list, 'subject': subject_list})
 
 
 def query_wikidata(imdb_ids_list):
