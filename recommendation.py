@@ -5,17 +5,22 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from rdflib import Graph
 from tqdm import tqdm
 import warnings
+from bidict import bidict
+
 
 from rdf import ns_movies, ns_genres, ns_predicates, ns_principals, load_rdf
 
 
 movielens_data_folder = 'movielens_data/'
+max_year = 2020
+min_year = 1975
 
 
 def extract_binary_features(actual_values: set, ordered_possible_values: list) -> np.array:
     """ Converts a categorical feature with multiple values to a multi-label binary encoding """
     mlb = MultiLabelBinarizer(classes=ordered_possible_values)
     binary_format = mlb.fit_transform([actual_values])
+    # binary_format = 2 * binary_format - 1   # TODO: Can we use -1 instead of 0? it makes more sense to me but it ruins user feature creation. Maybe add them aposteriori?
     return binary_format
 
 
@@ -32,28 +37,28 @@ def build_items_feature_vetors(rdf: Graph) -> (dict, np.array):   # list paralle
     print('Found', len(all_genres), 'genres.')
 
     print('Looking up actors...')
-    LEAST_MOVIES = 10    # Ignore insignificant actors
+    LEAST_MOVIES = 3   # Ignore insignificant actors
     all_actors = rdf.query(
         """ SELECT DISTINCT ?actor
             WHERE {
                 ?movie pred:hasActor ?actor . 
             } 
             GROUP BY ?actor 
-            HAVING (COUNT(?movie) > """ + str(LEAST_MOVIES) + ')',
+            HAVING (COUNT(?movie) >= """ + str(LEAST_MOVIES) + ')',
         initNs={'pred': ns_predicates})
     all_actors = sorted([str(a['actor']) for a in all_actors])
     # Note: keep just the id with: actors = sorted([str(a['actor']).split('/')[-1] for a in actors])
     print('Found', len(all_actors), 'actors with at least', LEAST_MOVIES, 'movies made.')
 
     print('Looking up directors...')
-    LEAST_MOVIES2 = 10
+    LEAST_MOVIES2 = 6
     all_directors = rdf.query(
         """ SELECT DISTINCT ?director
             WHERE {
                 ?movie pred:hasDirector ?director . 
             }
             GROUP BY ?director
-            HAVING (COUNT(?movie) > """ + str(LEAST_MOVIES2) + ')',
+            HAVING (COUNT(?movie) >= """ + str(LEAST_MOVIES2) + ')',
         initNs={'pred': ns_predicates})
     all_directors = sorted([str(d['director']) for d in all_directors])
     print('Found', len(all_directors), 'directors with at least', LEAST_MOVIES2, 'movies directed.')
@@ -80,8 +85,10 @@ def build_items_feature_vetors(rdf: Graph) -> (dict, np.array):   # list paralle
     print('Done.')
 
     NUM_FEATURES = 2 + len(all_genres) + len(all_actors) + len(all_directors)  # TODO
-    movie_pos: dict = {}
-    item_features = np.zeros((len(movies), NUM_FEATURES), dtype=np.float32)
+    movie_pos: bidict = bidict({})
+
+    print('Allocating memory...')
+    item_features = np.zeros((len(movies), NUM_FEATURES), dtype=np.float32)   # takes too long :(
 
     print('Creating item feature matrix...')
     for i, movie_data in tqdm(enumerate(movies), total=len(movies)):
@@ -89,8 +96,8 @@ def build_items_feature_vetors(rdf: Graph) -> (dict, np.array):   # list paralle
         movie_pos[movie_data['movie'].split('/')[-1]] = i   # dict with position in item_features
 
         # get numerical features
-        rating = float(movie_data['rating'])
-        year = float(movie_data['year']) / 1000     # TODO: add a factor?
+        rating = float(movie_data['rating']) / 10
+        year = float(int(movie_data['year']) - min_year) / (max_year - min_year)     # min-max scaling
 
         # Convert all categorical to binary format
         genres = set(movie_data['genres'].split(','))
@@ -119,10 +126,9 @@ def build_items_feature_vetors(rdf: Graph) -> (dict, np.array):   # list paralle
     return movie_pos, item_features
 
 
-def build_user_feature_vector(user_ratings: dict, movie_pos: dict, item_features: np.array or pd.DataFrame):
+def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_features: np.array or pd.DataFrame, temperature=1.0):
     """ Takes as input a user's ratings on IMDb titles and construct its user vector """
     avg_rating = 2.5    # TODO: use this as average or a user average? Or maybe the minimum of the two?
-    normalize_by = 1.0  # min(5.0 - avg_rating, avg_rating - 0.0)  # TODO
     user_vector = np.zeros(item_features.shape[1], dtype=np.float64)
     missing = 0
     count = 0
@@ -133,14 +139,14 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: dict, item_features
             # take the normal average for numerical features
             user_vector[:2] += item_features[pos, :2]
             # use weights based on rating for categorical features
-            user_vector[2:] += ((rating - avg_rating) / normalize_by) * item_features[pos, 2:]
+            user_vector[2:] += temperature * ((rating - avg_rating) / avg_rating) * item_features[pos, 2:]
             count += 1
         except KeyError:
             missing += 1
     # take the average TODO: does this average make any sense?
     user_vector /= count
-    # manually overwrite the first feature to be 5.0 as the desired IMDb rating (TODO)
-    user_vector[0] = 10.0
+    # manually overwrite the first feature to be 1.0 (the max value) as the desired IMDb rating (TODO)
+    user_vector[0] = 1.0
     # clip vector to maximum 1 and minimum -1 to optimize cosine similarity (TODO)
     user_vector[2:] = np.clip(user_vector[2:], -1.0, 1.0)
     if missing > 0:
@@ -152,16 +158,21 @@ def recommend_movies(user_features, item_features: np.array or pd.DataFrame, top
     """ Calculates cosine similarity or cosine distance between the user's feature vector and
         ALL item feature vectors, then orders items based on it. Suggest the most similar movies.
         LSH is typically used to speed this up. """
-    # TODO: calculate cosine similarity or distance between the user's vector and all the movies' vectors. Does this work?
+    # TODO: calculate cosine similarity or distance between the user's vector and all the movies' vectors. Does this work? -> probably
     cos_sim = np.zeros(item_features.shape[0], dtype=np.float64)
     cos_sim = user_features @ item_features.T         # takes dot product between each item vector and the user vector
     cos_sim /= np.linalg.norm(user_features)          # normalize by the magnitude of user vector
     cos_sim /= np.linalg.norm(item_features, axis=1)  # normalize by the magnitude of item vectors respectively
     print(cos_sim)
-    # TODO: order by similarity/distance
-    # TODO: return topK most similar or those above/below a threshold
+    # TODO: order by similarity/distance and keep topK most similar or those above/below a threshold
+    ordered_pos = (-cos_sim).argsort()
+    if top_K is not None:
+        ordered_pos = ordered_pos[:top_K]
+    elif threshold is not None:
+        keep = np.count_nonzero(cos_sim >= threshold)
+        ordered_pos = ordered_pos[:keep]
     # TODO (EXTRA): Can we speed this up with black-box LSH or something?
-    return cos_sim
+    return cos_sim, ordered_pos
 
 
 def load_user_ratings():
@@ -201,14 +212,26 @@ if __name__ == '__main__':
     print('Done')
 
     # keep a random user
-    random.seed(0)   # TODO
-    user_ratings = user_ratings[user_ratings['userId'] == random.randint(user_ratings['userId'].min(), user_ratings['userId'].max())]
-    user_rating = create_user_rating_dict(user_ratings)
+    # random.seed(0)   # TODO
+    # user_ratings = user_ratings[user_ratings['userId'] == random.randint(user_ratings['userId'].min(), user_ratings['userId'].max())]
+    # user_rating = create_user_rating_dict(user_ratings)
+
+    # Manually test a user rating input (STAR WARS)
+    user_rating = {
+        'tt0076759': 5.0,
+        'tt0080684': 4.5,
+        'tt0120915': 3.5,
+        'tt0121765': 4.5,
+        'tt0121766': 4.5
+    }
 
     # build user feature vector
     user_features = build_user_feature_vector(user_rating, movie_pos, item_features)
     print(user_features)
 
     # make recommendations
-    cos_sim = recommend_movies(user_features, item_features, top_K=10)
+    cos_sim, items_pos = recommend_movies(user_features, item_features, top_K=10)
     print('min:', min(cos_sim), 'max:', max(cos_sim))
+    for k, pos in enumerate(items_pos):
+        movie_id = movie_pos.inverse[pos]
+        print(f'{k}.', movie_id, 'with similarity', cos_sim[pos])
