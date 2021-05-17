@@ -230,6 +230,7 @@ if __name__ == '__main__':
     print(user_features)
 
     # make recommendations
+    item_features = 2 * item_features - 1   # TODO: Can we use -1 instead of 0? it makes more sense to me but it ruins user feature creation. Maybe add them aposteriori? --> this kinda works I think
     cos_sim, items_pos = recommend_movies(user_features, item_features, top_K=10)
     print('min:', min(cos_sim), 'max:', max(cos_sim))
     for k, pos in enumerate(items_pos):
