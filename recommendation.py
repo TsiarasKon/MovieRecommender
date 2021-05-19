@@ -9,7 +9,7 @@ from bidict import bidict
 
 
 from rdf import ns_movies, ns_genres, ns_predicates, ns_principals, load_rdf
-
+from utils import save_dict, load_dict
 
 movielens_data_folder = 'movielens_data/'
 max_year = 2020
@@ -24,7 +24,7 @@ def extract_binary_features(actual_values: set, ordered_possible_values: list) -
     return binary_format
 
 
-def build_items_feature_vetors(rdf: Graph) -> (dict, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
+def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
     """ Builds a feature vector for each movie """
     # get all possible categorical features
     print('Looking up genres...')
@@ -120,8 +120,13 @@ def build_items_feature_vetors(rdf: Graph) -> (dict, np.array):   # list paralle
         item_features[i, 2 + len(all_genres): 2 + len(all_genres) + len(all_actors)] = actors_feat
         item_features[i, 2 + len(all_genres) + len(all_actors):] = directors_feat
 
+    # save the result
+    if save:
+        print('Saving...')
+        np.save('item_features.npy', item_features)
+        save_dict(movie_pos, 'movie_pos')
+
     print('Done.')
-    # TODO: save the result?
 
     return movie_pos, item_features
 
@@ -143,7 +148,7 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_featur
             count += 1
         except KeyError:
             missing += 1
-    # take the average TODO: does this average make any sense?
+    # take the average
     user_vector /= count
     # manually overwrite the first feature to be 1.0 (the max value) as the desired IMDb rating (TODO)
     user_vector[0] = 1.0
@@ -154,17 +159,45 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_featur
     return user_vector
 
 
-def recommend_movies(user_features, item_features: np.array or pd.DataFrame, top_K=None, threshold=None):
+def build_user_feature_vectors(user_ratings: np.array, movie_pos: bidict, item_features: np.array or pd.DataFrame, temperature=1.0):
+    avg_rating = 2.5
+    user_vector = np.zeros(item_features.shape[1], dtype=np.float64)
+    missing = 0
+    count = 0
+    for movie_id, rating in user_ratings.items():
+        try:
+            pos = movie_pos[movie_id]
+            # TODO: add weights?
+            # take the normal average for numerical features
+            user_vector[:2] += item_features[pos, :2]
+            # use weights based on rating for categorical features
+            user_vector[2:] += temperature * ((rating - avg_rating) / avg_rating) * item_features[pos, 2:]
+            count += 1
+        except KeyError:
+            missing += 1
+    # take the average
+    user_vector /= count
+    # manually overwrite the first feature to be 1.0 (the max value) as the desired IMDb rating (TODO)
+    user_vector[0] = 1.0
+    # clip vector to maximum 1 and minimum -1 to optimize cosine similarity (TODO)
+    user_vector[2:] = np.clip(user_vector[2:], -1.0, 1.0)
+    if missing > 0:
+        print(f'Warning: {missing} movies out of {len(user_ratings)} were missing.')
+    return user_vector
+
+
+def recommend_movies(user_features: np.array, item_features: np.array, top_K=None, threshold=None):
     """ Calculates cosine similarity or cosine distance between the user's feature vector and
         ALL item feature vectors, then orders items based on it. Suggest the most similar movies.
         LSH is typically used to speed this up. """
     # TODO: calculate cosine similarity or distance between the user's vector and all the movies' vectors. Does this work? -> probably
-    cos_sim = np.zeros(item_features.shape[0], dtype=np.float64)
+    # cos_sim = np.zeros((user_features.shape[0] if len(user_features.shape) >= 2 else 1, item_features.shape[0]), dtype=np.float64)
     cos_sim = user_features @ item_features.T         # takes dot product between each item vector and the user vector
     cos_sim /= np.linalg.norm(user_features)          # normalize by the magnitude of user vector
     cos_sim /= np.linalg.norm(item_features, axis=1)  # normalize by the magnitude of item vectors respectively
     print(cos_sim)
-    # TODO: order by similarity/distance and keep topK most similar or those above/below a threshold
+
+    # order by similarity/distance and keep topK most similar or those above/below a threshold
     ordered_pos = (-cos_sim).argsort()
     if top_K is not None:
         ordered_pos = ordered_pos[:top_K]
@@ -175,11 +208,13 @@ def recommend_movies(user_features, item_features: np.array or pd.DataFrame, top
     return cos_sim, ordered_pos
 
 
-def load_user_ratings():
+def load_user_ratings(limit=None) -> pd.DataFrame:
     # load movielens user reviews data
     user_ratings = pd.read_csv(movielens_data_folder + 'ratings.csv',
                                usecols=['userId', 'movieId', 'rating'],
                                dtype={'userId': np.int32, 'movieId': np.int32, 'rating': np.float32})
+    if limit is not None:
+        user_ratings = user_ratings[:limit]
     # link movieIds with imdbIds
     links = pd.read_csv(movielens_data_folder + 'links.csv',
                         index_col='movieId',
@@ -196,25 +231,53 @@ def create_user_rating_dict(user_ratings: pd.DataFrame):
     return r
 
 
-if __name__ == '__main__':
-    # load rdf
-    print('Loading rdf...')
-    rdf = load_rdf()
-    print('done')
-
-    # extract item features
-    movie_pos, item_features = build_items_feature_vetors(rdf)
-    print(item_features)
-
+def evaluate(item_features: np.array, movie_pos: dict):
     # load movieLens user ratings
     print('Loading movieLens user ratings...')
-    user_ratings = load_user_ratings()
+    user_ratings: pd.DataFrame = load_user_ratings(limit=1000)
+    print(user_ratings)
     print('Done')
 
-    # keep a random user
-    # random.seed(0)   # TODO
-    # user_ratings = user_ratings[user_ratings['userId'] == random.randint(user_ratings['userId'].min(), user_ratings['userId'].max())]
-    # user_rating = create_user_rating_dict(user_ratings)
+    # create user features one-by-one (TODO: slow but easier)
+    num_users = user_ratings['userId'].max() + 1
+    user_features = np.zeros((num_users, item_features.shape[1]))
+    for i in tqdm(range(num_users), total=num_users):
+        user_rating = create_user_rating_dict(user_ratings[user_ratings['userId'] == i])
+        user_features[i, :] = build_user_feature_vector(user_rating, movie_pos, item_features)
+    print(user_features)
+
+
+def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict):
+    # build user feature vector
+    user_features = build_user_feature_vector(user_rating, movie_pos, item_features)
+    print(user_features)
+
+    # make recommendations
+    item_features = 2 * item_features - 1   # TODO: Can we use -1 instead of 0? it makes more sense to me but it ruins user feature creation. Maybe add them aposteriori? --> this kinda works I think
+    cos_sim, items_pos = recommend_movies(user_features, item_features, top_K=20)
+    print('min:', min(cos_sim), 'max:', max(cos_sim))
+    for k, pos in enumerate(items_pos):
+        movie_id = movie_pos.inverse[pos]
+        print(f'{k}.', movie_id, 'with similarity', cos_sim[pos])
+
+
+if __name__ == '__main__':
+    load_item_features = True
+
+    if not load_item_features:
+        # load rdf
+        print('Loading rdf...')
+        rdf = load_rdf()
+        print('done')
+
+        # extract item features
+        movie_pos, item_features = build_items_feature_vetors(rdf)
+        print(item_features)
+    else:
+        item_features = np.load('item_features.npy')
+        movie_pos: bidict = load_dict('movie_pos')
+
+        print(item_features)
 
     # Manually test a user rating input (STAR WARS)
     user_rating = {
@@ -225,14 +288,6 @@ if __name__ == '__main__':
         'tt0121766': 4.5
     }
 
-    # build user feature vector
-    user_features = build_user_feature_vector(user_rating, movie_pos, item_features)
-    print(user_features)
+    recommend_for_single_user(user_rating, item_features, movie_pos)
 
-    # make recommendations
-    item_features = 2 * item_features - 1   # TODO: Can we use -1 instead of 0? it makes more sense to me but it ruins user feature creation. Maybe add them aposteriori? --> this kinda works I think
-    cos_sim, items_pos = recommend_movies(user_features, item_features, top_K=10)
-    print('min:', min(cos_sim), 'max:', max(cos_sim))
-    for k, pos in enumerate(items_pos):
-        movie_id = movie_pos.inverse[pos]
-        print(f'{k}.', movie_id, 'with similarity', cos_sim[pos])
+    # evaluate(item_features, movie_pos)
