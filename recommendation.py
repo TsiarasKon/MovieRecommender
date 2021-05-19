@@ -130,7 +130,7 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
     return movie_pos, item_features
 
 
-def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_features: np.array, temperature=1.0):
+def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_features: np.array, temperature=1.0, verbose=False):
     """ Takes as input a user's ratings on IMDb titles and construct its user vector """
     # Note: higher temperature helps have higher values (closer to 1 and -1) when too many features are needed to even come close
     avg_rating = 2.5    # TODO: use this as average or a user average? Or maybe the minimum of the two?
@@ -154,7 +154,7 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_featur
     user_vector[0] = 1.0
     # clip vector to maximum 1 and minimum -1 to optimize cosine similarity (TODO)
     user_vector[2:] = np.clip(user_vector[2:], -1.0, 1.0)
-    if missing > 0:
+    if verbose and missing > 0:
         print(f'Warning: {missing} movies out of {len(user_ratings)} were missing.')
     return user_vector
 
@@ -168,7 +168,6 @@ def calculate_similarity(user_features: np.array, item_features: np.array, top_K
     cos_sim = user_features @ item_features.T         # takes dot product between each item vector and the user vector
     cos_sim /= np.linalg.norm(user_features)          # normalize by the magnitude of user vector
     cos_sim /= np.linalg.norm(item_features, axis=1)  # normalize by the magnitude of item vectors respectively
-    print(cos_sim)
 
     # order by similarity/distance and keep topK most similar or those above/below a threshold
     ordered_pos = (-cos_sim).argsort()
@@ -190,54 +189,72 @@ def calculate_similarity(user_features: np.array, item_features: np.array, top_K
     return cos_sim, ordered_pos
 
 
-def evaluate(item_features: np.array, movie_pos: bidict, THRESHOLD=3.0, top_K=20):
+def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, top_K=25,
+             limit=100000, use_only_known_ratings=True):
+    """ Depending on use_only_known_ratings we consider all items or only the items the user has rated and hence knows about.
+        Limit has to be set to fit all tables in memory.
+     """
+
     # load movieLens user ratings
     print('Loading movieLens user ratings...')
-    user_ratings: pd.DataFrame = load_user_ratings(movielens_data_folder, limit=1000)
-    print(user_ratings)
+    user_ratings: pd.DataFrame = load_user_ratings(movielens_data_folder, limit=limit)
+    # print(user_ratings)
     print('Done')
 
-    # create user features one-by-one (TODO: perhaps slow but easier)
-    num_users = user_ratings['userId'].max()
+    # create user features one-by-one (perhaps slower than a vectorized, but easier
+    num_users = user_ratings['userId'].max() - 1   # -1 -> ignore last user which may have incomplete data
+    print(f'Found {num_users} users')
     user_features = np.zeros((num_users, item_features.shape[1]))
+    user_ratings_dicts = []
     relevant_movies_per_user = []
-    for i in tqdm(range(num_users), total=num_users):
+    for i in tqdm(range(num_users), total=num_users, desc='Creating user features'):
         user_rating = create_user_rating_dict(user_ratings[user_ratings['userId'] == i + 1])
         user_features[i, :] = build_user_feature_vector(user_rating, movie_pos, item_features)
-        relevant_movies_per_user.append({m for m, r in user_rating.items() if r >= THRESHOLD})
-    print(user_features)
+        user_ratings_dicts.append(user_rating)
+        relevant_movies_per_user.append({m for m, r in user_rating.items() if r >= rating_threshold})
+    # print(user_features)
 
+    print('Calculating similarity...')
     item_features = 2 * item_features - 1   # TODO: use this or not?
-    cos_sim, ordered_pos = calculate_similarity(user_features, item_features, top_K=top_K)
-    print(cos_sim)
+    cos_sim, ordered_pos = calculate_similarity(user_features, item_features, top_K=top_K if not use_only_known_ratings else None)
+    # print(cos_sim)
 
-    # http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
-    # TODO: calculate precision (~) and/or recall at cut-off k (r@k) # relevant / # movies rated well
-    #    probably by keeping the relevant movie ids in the loop above and then checking how many of them we got in our recommendations
+    # Source: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
     # TODO: train-test split how?
     avg_recalls = []
     avg_precisions = []
-    for i in tqdm(range(num_users), total=num_users):
+    for i in tqdm(range(num_users), total=num_users, desc='Calculating MAP and recall'):
+        m = len(relevant_movies_per_user[i])
+        if m == 0:  # if there are no relevant movies for a user then don't include him
+            continue
         avg_precision = 0.0
         num_relevant = 0
-        for k in range(top_K):
+        no_knowledge = 0
+        N = top_K if not use_only_known_ratings else item_features.shape[0]
+        for k in range(N):
             # if k-th item is relevant
             k_movie_id = movie_pos.inverse[ordered_pos[i, k]]
             if k_movie_id in relevant_movies_per_user[i]:
                 num_relevant += 1
-                # precision = # of our recommendations that are relevant / # of items we recommended
-                precision = num_relevant / (k + 1)     # TODO: right? Total predicted here is k+1
+                precision = num_relevant / (k - no_knowledge + 1)     # TODO: right? Total predicted here is k+1
                 avg_precision += precision
-        m = len(relevant_movies_per_user[i])
-        avg_precision /= min(top_K, m)  # TODO: but what if top_K is much less than this? Should I take the minimum?
+            elif use_only_known_ratings and k_movie_id not in user_ratings_dicts[i]:
+                # if not a movie on which we have a rating then don't consider it as a part of our top_K
+                no_knowledge += 1
+            if k - no_knowledge + 1 >= top_K: break      # if found top_K rated movies then stop
+        if top_K - no_knowledge == 0:  # can't tell
+            continue
+        # precision = # of our recommendations that are relevant / # of items we recommended
+        avg_precision /= min(top_K, m)
         avg_precisions.append(avg_precision)
-        # recall = # of our recommendations that are relevant / # of all the possible relevant items TODO: min(topK) though?
+        # recall = # of our recommendations that are relevant / # of all the possible relevant items
         recall = num_relevant / min(top_K, m)
         avg_recalls.append(recall)
     print(avg_precisions)
     print(avg_recalls)
     print(f'MAP @ {top_K} = {np.mean(avg_precisions)}')
     print(f'Average recall = {np.mean(avg_recalls)}')
+    print(f'{len(avg_precisions)} out of {num_users} users were used')
 
 def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict, ignore_seen=False, topK=20):
     # build user feature vector
