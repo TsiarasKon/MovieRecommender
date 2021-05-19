@@ -172,32 +172,72 @@ def calculate_similarity(user_features: np.array, item_features: np.array, top_K
 
     # order by similarity/distance and keep topK most similar or those above/below a threshold
     ordered_pos = (-cos_sim).argsort()
-    if top_K is not None:
-        ordered_pos = ordered_pos[:top_K]
-    elif threshold is not None:
-        keep = np.count_nonzero(cos_sim >= threshold)
-        ordered_pos = ordered_pos[:keep]
+    if len(cos_sim.shape) < 2:   # can't do this if 2d
+        if top_K is not None:
+            ordered_pos = ordered_pos[:top_K]
+        elif threshold is not None:
+            keep = np.count_nonzero(cos_sim >= threshold)
+            ordered_pos = ordered_pos[:keep]
+    elif len(cos_sim.shape) == 2:
+        if top_K is not None:
+            ordered_pos = ordered_pos[:, :top_K]
+        elif threshold is not None:
+            keep = np.count_nonzero(cos_sim >= threshold)
+            ordered_pos = ordered_pos[:, :keep]
 
     # TODO (EXTRA): Can we speed this up with black-box LSH or something?
 
     return cos_sim, ordered_pos
 
 
-def evaluate(item_features: np.array, movie_pos: dict):
+def evaluate(item_features: np.array, movie_pos: bidict, THRESHOLD=3.0, top_K=20):
     # load movieLens user ratings
     print('Loading movieLens user ratings...')
     user_ratings: pd.DataFrame = load_user_ratings(movielens_data_folder, limit=1000)
     print(user_ratings)
     print('Done')
 
-    # create user features one-by-one (TODO: slow but easier)
+    # create user features one-by-one (TODO: perhaps slow but easier)
     num_users = user_ratings['userId'].max()
     user_features = np.zeros((num_users, item_features.shape[1]))
+    relevant_movies_per_user = []
     for i in tqdm(range(num_users), total=num_users):
         user_rating = create_user_rating_dict(user_ratings[user_ratings['userId'] == i + 1])
         user_features[i, :] = build_user_feature_vector(user_rating, movie_pos, item_features)
+        relevant_movies_per_user.append({m for m, r in user_rating.items() if r >= THRESHOLD})
     print(user_features)
 
+    item_features = 2 * item_features - 1   # TODO: use this or not?
+    cos_sim, ordered_pos = calculate_similarity(user_features, item_features, top_K=top_K)
+    print(cos_sim)
+
+    # http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
+    # TODO: calculate precision (~) and/or recall at cut-off k (r@k) # relevant / # movies rated well
+    #    probably by keeping the relevant movie ids in the loop above and then checking how many of them we got in our recommendations
+    # TODO: train-test split how?
+    avg_recalls = []
+    avg_precisions = []
+    for i in tqdm(range(num_users), total=num_users):
+        avg_precision = 0.0
+        num_relevant = 0
+        for k in range(top_K):
+            # if k-th item is relevant
+            k_movie_id = movie_pos.inverse[ordered_pos[i, k]]
+            if k_movie_id in relevant_movies_per_user[i]:
+                num_relevant += 1
+                # precision = # of our recommendations that are relevant / # of items we recommended
+                precision = num_relevant / (k + 1)     # TODO: right? Total predicted here is k+1
+                avg_precision += precision
+        m = len(relevant_movies_per_user[i])
+        avg_precision /= min(top_K, m)  # TODO: but what if top_K is much less than this? Should I take the minimum?
+        avg_precisions.append(avg_precision)
+        # recall = # of our recommendations that are relevant / # of all the possible relevant items TODO: min(topK) though?
+        recall = num_relevant / min(top_K, m)
+        avg_recalls.append(recall)
+    print(avg_precisions)
+    print(avg_recalls)
+    print(f'MAP @ {top_K} = {np.mean(avg_precisions)}')
+    print(f'Average recall = {np.mean(avg_recalls)}')
 
 def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict, ignore_seen=False, topK=20):
     # build user feature vector
@@ -238,14 +278,14 @@ if __name__ == '__main__':
         print(item_features)
 
     # Manually test a user rating input (STAR WARS)
-    user_rating = {
-        'tt0076759': 5.0,
-        'tt0080684': 4.5,
-        'tt0120915': 3.5,
-        'tt0121765': 4.5,
-        'tt0121766': 4.5
-    }
+    # user_rating = {
+    #     'tt0076759': 5.0,
+    #     'tt0080684': 4.5,
+    #     'tt0120915': 3.5,
+    #     'tt0121765': 4.5,
+    #     'tt0121766': 4.5
+    # }
+    #
+    # recommend_for_single_user(user_rating, item_features, movie_pos)
 
-    recommend_for_single_user(user_rating, item_features, movie_pos)
-
-    # evaluate(item_features, movie_pos)
+    evaluate(item_features, movie_pos)
