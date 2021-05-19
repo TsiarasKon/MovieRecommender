@@ -16,6 +16,14 @@ max_year = 2020
 min_year = 1975
 
 
+""" HYPERPARAMETERS """
+override_rating_to_best = True
+temperature = 50.0  # boost for categorical feature to be more towards -1 and 1
+# weights (higher weight -> more important), we don't want numerical features to get overshadowed by categorical ones
+w_rating = 10
+w_date = 1
+
+
 def extract_binary_features(actual_values: set, ordered_possible_values: list) -> np.array:
     """ Converts a categorical feature with multiple values to a multi-label binary encoding """
     mlb = MultiLabelBinarizer(classes=ordered_possible_values)
@@ -95,8 +103,8 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
         movie_pos[movie_data['movie'].split('/')[-1]] = i   # dict with position in item_features
 
         # get numerical features
-        rating = float(movie_data['rating']) / 10
-        year = float(int(movie_data['year']) - min_year) / (max_year - min_year)     # min-max scaling
+        rating = (float(movie_data['rating']) / 10) * w_rating
+        year = (float(int(movie_data['year']) - min_year) / (max_year - min_year)) * w_date     # min-max scaling
 
         # Convert all categorical to binary format
         genres = set(movie_data['genres'].split(','))
@@ -130,8 +138,10 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
     return movie_pos, item_features
 
 
-def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_features: np.array, temperature=1.0, verbose=False):
+def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_features: np.array, temperature=temperature,
+                              override_rating_to_best=override_rating_to_best, verbose=False):
     """ Takes as input a user's ratings on IMDb titles and construct its user vector """
+    # TODO: temperature of 50 - 100 gave better MAP
     # Note: higher temperature helps have higher values (closer to 1 and -1) when too many features are needed to even come close
     avg_rating = 2.5    # TODO: use this as average or a user average? Or maybe the minimum of the two?
     user_vector = np.zeros(item_features.shape[1], dtype=np.float64)
@@ -140,7 +150,6 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_featur
     for movie_id, rating in user_ratings.items():
         try:
             pos = movie_pos[movie_id]
-            # TODO: add weights?
             # take the normal average for numerical features
             user_vector[:2] += item_features[pos, :2]
             # use weights based on rating for categorical features
@@ -151,8 +160,9 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_featur
     # take the average
     user_vector /= count
     # manually overwrite the first feature to be 1.0 (the max value) as the desired IMDb rating (TODO)
-    user_vector[0] = 1.0
-    # clip vector to maximum 1 and minimum -1 to optimize cosine similarity (TODO)
+    if override_rating_to_best:
+        user_vector[0] = 1.0 * w_rating
+    # clip vector to maximum 1 and minimum -1 to optimize cosine similarity
     user_vector[2:] = np.clip(user_vector[2:], -1.0, 1.0)
     if verbose and missing > 0:
         print(f'Warning: {missing} movies out of {len(user_ratings)} were missing.')
@@ -190,7 +200,7 @@ def calculate_similarity(user_features: np.array, item_features: np.array, top_K
 
 
 def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, top_K=25,
-             limit=100000, use_only_known_ratings=True):
+             limit=100000, use_only_known_ratings=True, print_stats=True):
     """ Depending on use_only_known_ratings we consider all items or only the items the user has rated and hence knows about.
         Limit has to be set to fit all tables in memory.
      """
@@ -214,8 +224,14 @@ def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, t
         relevant_movies_per_user.append({m for m, r in user_rating.items() if r >= rating_threshold})
     # print(user_features)
 
+    if print_stats:
+        nonzero = np.count_nonzero(user_features, axis=1)
+        print(nonzero.shape)
+        mean = np.mean(nonzero)
+        print('Average non_zero features in user_features are:', f'{mean:.2f}', 'out of', item_features.shape[1], f'({100 * mean / item_features.shape[1]:.2f}%)')
+
     print('Calculating similarity...')
-    item_features = 2 * item_features - 1   # TODO: use this or not?
+    item_features = 2 * item_features - 1   # TODO: use this or not?  -> it improves MAP and recall so yes
     cos_sim, ordered_pos = calculate_similarity(user_features, item_features, top_K=top_K if not use_only_known_ratings else None)
     # print(cos_sim)
 
@@ -262,7 +278,7 @@ def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_
     print(user_features)
 
     # make recommendations
-    item_features = 2 * item_features - 1   # TODO: Can we use -1 instead of 0? it makes more sense to me but it ruins user feature creation. Maybe add them aposteriori? --> this kinda works I think
+    item_features = 2 * item_features - 1
     cos_sim, items_pos = calculate_similarity(user_features, item_features, top_K=None if ignore_seen else topK)
     print('min:', min(cos_sim), 'max:', max(cos_sim))
     k = 1
