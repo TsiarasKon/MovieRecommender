@@ -1,4 +1,3 @@
-import random
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -18,9 +17,11 @@ min_year = 1975
 
 """ HYPERPARAMETERS """
 override_rating_to_best = True
-temperature = 50.0  # boost for categorical feature to be more towards -1 and 1
+temperature = 50         # boost for categorical feature to be more towards -1 and 1
+clip = True              # TODO: Should we clip feature-vectors. Only the direction of the final vectors matters. Larger numbers send the vector more towards that direction.
 # weights (higher weight -> more important), we don't want numerical features to get overshadowed by categorical ones
-w_rating = 10
+# TODO: if the weights change we have to rebuild the graph
+w_rating = 1
 w_date = 1
 
 
@@ -117,9 +118,6 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
             actors_feat = extract_binary_features(actors, all_actors)
             directors_feat = extract_binary_features(directors, all_directors)
 
-        # TODO (EXTRA): Add a different weight to each feature with which to experiment "balancing"?  How do we change this afterwards? Must also store it?
-        pass
-
         # TODO: Concat all of them into one big feature vector
         item_features[i, 0] = rating
         item_features[i, 1] = year
@@ -139,7 +137,7 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
 
 
 def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_features: np.array, temperature=temperature,
-                              override_rating_to_best=override_rating_to_best, verbose=False):
+                              override_rating_to_best=override_rating_to_best, clip=clip, verbose=False):
     """ Takes as input a user's ratings on IMDb titles and construct its user vector """
     # TODO: temperature of 50 - 100 gave better MAP
     # Note: higher temperature helps have higher values (closer to 1 and -1) when too many features are needed to even come close
@@ -163,7 +161,7 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_featur
     if override_rating_to_best:
         user_vector[0] = 1.0 * w_rating
     # clip vector to maximum 1 and minimum -1 to optimize cosine similarity
-    user_vector[2:] = np.clip(user_vector[2:], -1.0, 1.0)
+    if clip: user_vector[2:] = np.clip(user_vector[2:], -1.0, 1.0)
     if verbose and missing > 0:
         print(f'Warning: {missing} movies out of {len(user_ratings)} were missing.')
     return user_vector
@@ -203,7 +201,7 @@ def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, t
              limit=100000, use_only_known_ratings=True, print_stats=True):
     """ Depending on use_only_known_ratings we consider all items or only the items the user has rated and hence knows about.
         Limit has to be set to fit all tables in memory.
-     """
+    """
 
     # load movieLens user ratings
     print('Loading movieLens user ratings...')
@@ -231,7 +229,7 @@ def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, t
         print('Average non_zero features in user_features are:', f'{mean:.2f}', 'out of', item_features.shape[1], f'({100 * mean / item_features.shape[1]:.2f}%)')
 
     print('Calculating similarity...')
-    item_features = 2 * item_features - 1   # TODO: use this or not?  -> it improves MAP and recall so yes
+    item_features = 2 * item_features - 1   # TODO: use this or not?  -> it improves MAP and recall so yes?
     cos_sim, ordered_pos = calculate_similarity(user_features, item_features, top_K=top_K if not use_only_known_ratings else None)
     # print(cos_sim)
 
@@ -252,7 +250,7 @@ def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, t
             k_movie_id = movie_pos.inverse[ordered_pos[i, k]]
             if k_movie_id in relevant_movies_per_user[i]:
                 num_relevant += 1
-                precision = num_relevant / (k - no_knowledge + 1)     # TODO: right? Total predicted here is k+1
+                precision = num_relevant / (k - no_knowledge + 1)
                 avg_precision += precision
             elif use_only_known_ratings and k_movie_id not in user_ratings_dicts[i]:
                 # if not a movie on which we have a rating then don't consider it as a part of our top_K
@@ -311,14 +309,14 @@ if __name__ == '__main__':
         print(item_features)
 
     # Manually test a user rating input (STAR WARS)
-    # user_rating = {
-    #     'tt0076759': 5.0,
-    #     'tt0080684': 4.5,
-    #     'tt0120915': 3.5,
-    #     'tt0121765': 4.5,
-    #     'tt0121766': 4.5
-    # }
-    #
-    # recommend_for_single_user(user_rating, item_features, movie_pos)
+    user_rating = {
+        'tt0076759': 5.0,
+        'tt0080684': 4.5,
+        'tt0120915': 3.5,
+        'tt0121765': 4.5,
+        'tt0121766': 4.5
+    }
+
+    recommend_for_single_user(user_rating, item_features, movie_pos)
 
     evaluate(item_features, movie_pos)
