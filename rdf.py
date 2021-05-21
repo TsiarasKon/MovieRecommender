@@ -3,8 +3,8 @@ import numpy as np
 from tqdm import tqdm
 
 from rdflib import Graph, Literal, URIRef, Namespace, XSD
-
 from wikidata_service import get_all_from_wikidata
+
 
 imdb_data_folder = 'imdb_data/'
 name_basics_file = 'name.basics.tsv'
@@ -25,6 +25,7 @@ ns_movies = Namespace('https://www.imdb.com/title/')
 ns_genres = Namespace('https://www.imdb.com/search/title/?genres=')
 ns_principals = Namespace('https://www.imdb.com/name/')
 ns_predicates = Namespace('http://example.org/props/')
+ns_wiki = Namespace('http://www.wikidata.org/entity/')
 
 
 def data_loading():
@@ -70,17 +71,6 @@ def data_loading():
     print(movies_df)
     print(principals_df)
 
-    # TODO: do we need these?
-    # print('loading people info')
-    # people = pd.read_csv(imdb_data_folder + 'name.basics.tsv',
-    #                      sep='\t',
-    #                      encoding='utf-8',
-    #                      keep_default_na=False,
-    #                      na_values=['\\N'],
-    #                      usecols=['nconst', 'primaryName'])  # TODO: need more?
-    # filtered = people[people['nconst'].isin(movies_df.get_level_values('nconst'))]
-    # people_df = pd.DataFrame(index=filtered['nconst'], data={'name': list(filtered['primaryName'])})
-
     return movies_df, principals_df
 
 
@@ -89,7 +79,11 @@ def build_and_save_rdf(save=True, limit=None):
 
     g = Graph()
 
-    for imdb_id, data in tqdm(movies_df.iterrows(), total=movies_df.shape[0] if limit is None else min(movies_df.shape[0], limit)):
+    # Get extra data from wikidata
+    wikidata_df = get_all_from_wikidata(movies_df.index.tolist())
+    print(wikidata_df)
+
+    for imdb_id, data in tqdm(movies_df.iterrows(), total=movies_df.shape[0] if limit is None else min(movies_df.shape[0], limit), desc='Building rdf graph'):
         movie = URIRef(ns_movies + imdb_id)
 
         # find artists involved
@@ -116,9 +110,9 @@ def build_and_save_rdf(save=True, limit=None):
         rating = Literal(str(data['averageRating']), datatype=XSD.float)
         has_rating = URIRef(ns_predicates + 'hasRating')
         g.add((movie, has_rating, rating))
-        votes = Literal(str(data['numVotes']), datatype=XSD.integer)
-        has_votes = URIRef(ns_predicates + 'hasVotes')
-        g.add((movie, has_votes, votes))
+        # votes = Literal(str(data['numVotes']), datatype=XSD.integer)
+        # has_votes = URIRef(ns_predicates + 'hasVotes')
+        # g.add((movie, has_votes, votes))
 
         # add artists such as actors, directors, etc
         for artist, category in zip(artists['nconst'], artists['category']):
@@ -131,15 +125,27 @@ def build_and_save_rdf(save=True, limit=None):
                 pred = URIRef(ns_predicates + 'hasWriter')
             elif category == 'composer':
                 pred = URIRef(ns_predicates + 'hasComposer')
-            # TODO: editor and cinematographer?
             if pred is not None:
                 g.add((movie, pred, URIRef(ns_principals + artist)))
 
         # TODO: are info for artists useful for our task? Should we add such triples?
 
-    # TODO: create rdf graph from wikidata
-    # wikidata_df = get_all_from_wikidata(movies_df.index.tolist())
-    # print(wikidata_df)
+        # create rdf graph from wikidata  TODO: use codes instead of names?
+        if imdb_id in wikidata_df.index:
+            has_series = URIRef(ns_predicates + 'hasSeries')
+            series = wikidata_df.loc[imdb_id]['series'].split('; ')
+            for s in series:
+                if len(s) > 0 and s.startswith('http'): g.add((movie, has_series, URIRef(s)))
+
+            has_distributor = URIRef(ns_predicates + 'hasDistributor')
+            distributors = wikidata_df.loc[imdb_id]['distributors'].split('; ')
+            for d in distributors:
+                if len(d) > 0 and d.startswith('http'): g.add((movie, has_distributor, URIRef(d)))
+
+            has_subject = URIRef(ns_predicates + 'hasSubject')
+            subjects = wikidata_df.loc[imdb_id]['subject'].split('; ')
+            for s in subjects:
+                if len(s) > 0 and s.startswith('http'): g.add((movie, has_subject, URIRef(s)))
 
     # Save graph
     if save:
@@ -155,7 +161,7 @@ def load_rdf():
 
 
 if __name__ == '__main__':
-    only_load = False    # load or build from scratch?
+    only_load = True    # load or build from scratch?
 
     if only_load:
         print('Loading rdf...')
