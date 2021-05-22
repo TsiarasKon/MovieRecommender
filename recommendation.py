@@ -15,14 +15,23 @@ max_year = 2020
 min_year = 1975
 
 
+use_wikidata = True
+
+
 """ HYPERPARAMETERS """
 override_rating_to_best = True
 temperature = 50         # boost for categorical feature to be more towards -1 and 1
-clip = True              # TODO: Should we clip feature-vectors. Only the direction of the final vectors matters. Larger numbers send the vector more towards that direction.
-# weights (higher weight -> more important), we don't want numerical features to get overshadowed by categorical ones
-# TODO: if the weights change we have to rebuild the graph
+clip = True              # TODO: Should we clip feature-vectors? Only the direction of the final vectors matters. Larger numbers send the vector more towards that direction.
+
+# weights (higher weight -> more important), we don't want numerical features to get overshadowed by categorical ones # TODO: if the weights change we have to rebuild the graph
 w_rating = 1
 w_date = 1
+w_genres = 1
+w_actors = 1
+w_directors = 1
+w_series = 2
+w_subjects = 1
+w_distributors = 0.2
 
 
 def extract_binary_features(actual_values: set, ordered_possible_values: list) -> np.array:
@@ -32,7 +41,8 @@ def extract_binary_features(actual_values: set, ordered_possible_values: list) -
     return binary_format
 
 
-def build_items_feature_vetors(rdf: Graph, use_wikidata=True, save=True) -> (dict, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
+# noinspection PyUnboundLocalVariable
+def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
     """ Builds a feature vector for each movie """
     # get all possible categorical features
     print('Looking up genres...')
@@ -140,6 +150,7 @@ def build_items_feature_vetors(rdf: Graph, use_wikidata=True, save=True) -> (dic
                     'genres': ns_genres,
                     'pred': ns_predicates,
                     'principals': ns_principals})
+        print('Done.')
     else:
         # Query all movies on rdf and their associated features
         print('Querying movie features...')
@@ -160,11 +171,18 @@ def build_items_feature_vetors(rdf: Graph, use_wikidata=True, save=True) -> (dic
                     'genres': ns_genres,
                     'pred': ns_predicates,
                     'principals': ns_principals})
-    print('Done.')
+        print('Done.')
 
+    feature_lens: dict = {}
     NUM_FEATURES = 2 + len(all_genres) + len(all_actors) + len(all_directors)  # TODO
+    feature_lens['genres'] = len(all_genres)
+    feature_lens['actors'] = len(all_actors)
+    feature_lens['directors'] = len(all_directors)
     if use_wikidata:
         NUM_FEATURES += len(all_series) + len(all_subjects) + len(all_dists)
+        feature_lens['series'] = len(all_series)
+        feature_lens['subjects'] = len(all_subjects)
+        feature_lens['dists'] = len(all_dists)
     movie_pos: bidict = bidict({})
 
     print(f'Allocating memory for {len(movies)} x {NUM_FEATURES} array...')
@@ -176,8 +194,8 @@ def build_items_feature_vetors(rdf: Graph, use_wikidata=True, save=True) -> (dic
         movie_pos[movie_data['movie'].split('/')[-1]] = i   # dict with position in item_features
 
         # get numerical features
-        rating = (float(movie_data['rating']) / 10) * w_rating
-        year = (float(int(movie_data['year']) - min_year) / (max_year - min_year)) * w_date     # min-max scaling
+        rating = (float(movie_data['rating']) / 10)
+        year = (float(int(movie_data['year']) - min_year) / (max_year - min_year))     # min-max scaling
 
         # Convert all categorical to binary format
         genres = set(movie_data['genres'].split(','))
@@ -200,29 +218,30 @@ def build_items_feature_vetors(rdf: Graph, use_wikidata=True, save=True) -> (dic
                 dists_feat = extract_binary_features(dists, all_dists)
 
         # Concat all of them into one big feature vector
-        item_features[i, 0] = rating
-        item_features[i, 1] = year
-        item_features[i, 2: 2 + len(all_genres)] = genres_feat
-        item_features[i, 2 + len(all_genres): 2 + len(all_genres) + len(all_actors)] = actors_feat
-        item_features[i, 2 + len(all_genres) + len(all_actors): 2 + len(all_genres) + len(all_actors) + len(all_directors)] = directors_feat
+        item_features[i, 0] = w_rating * rating
+        item_features[i, 1] = w_date * year
+        item_features[i, 2: 2 + len(all_genres)] = w_genres * genres_feat
+        item_features[i, 2 + len(all_genres): 2 + len(all_genres) + len(all_actors)] = w_actors * actors_feat
+        item_features[i, 2 + len(all_genres) + len(all_actors): 2 + len(all_genres) + len(all_actors) + len(all_directors)] = w_directors * directors_feat
         if use_wikidata:
             last = 2 + len(all_genres) + len(all_actors) + len(all_directors)
-            item_features[i, last: last + len(all_series)] = series_feat
-            item_features[i, last + len(all_series): last + len(all_series) + len(all_subjects)] = subjects_feat
-            item_features[i, last + len(all_series) + len(all_subjects):] = dists_feat
+            item_features[i, last: last + len(all_series)] = w_series * series_feat
+            item_features[i, last + len(all_series): last + len(all_series) + len(all_subjects)] = w_subjects * subjects_feat
+            item_features[i, last + len(all_series) + len(all_subjects):] = w_distributors * dists_feat
 
     # save the result
     if save:
         print('Saving...')
-        np.save('item_features.npy', item_features)
-        save_dict(movie_pos, 'movie_pos')
+        np.save(f'item_features{"_wikidata" if use_wikidata else ""}.npy', item_features)
+        save_dict(movie_pos, f'movie_pos{"_wikidata" if use_wikidata else ""}')
+        save_dict(feature_lens, f'feature_lens{"_wikidata" if use_wikidata else ""}')
 
     print('Done.')
 
-    return movie_pos, item_features
+    return movie_pos, item_features, feature_lens
 
 
-def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_features: np.array, temperature=temperature,
+def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, feature_lens: dict, item_features: np.array, temperature=temperature,
                               override_rating_to_best=override_rating_to_best, clip=clip, verbose=False):
     """ Takes as input a user's ratings on IMDb titles and construct its user vector """
     # TODO: temperature of 50 - 100 gave better MAP
@@ -247,7 +266,20 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, item_featur
     if override_rating_to_best:
         user_vector[0] = 1.0 * w_rating
     # clip vector to maximum 1 and minimum -1 to optimize cosine similarity
-    if clip: user_vector[2:] = np.clip(user_vector[2:], -1.0, 1.0)
+    if clip:
+        # clip separately each feature based on weight
+        max_clip = np.ones(item_features.shape[1] - 2)
+        weights = [w_genres, w_actors, w_directors]
+        lens = [feature_lens['genres'], feature_lens['actors'], feature_lens['directors']]
+        if use_wikidata:
+            weights += [w_series, w_subjects, w_distributors]
+            lens += [feature_lens['series'], feature_lens['subjects'], feature_lens['dists']]
+        last = 0
+        for i in range(len(weights)):
+            max_clip[last: last + lens[i]] *= weights[i]
+            last += lens[i]
+        min_clip = -max_clip  # symmetric
+        user_vector[2:] = np.clip(user_vector[2:], min_clip, max_clip)
     if verbose and missing > 0:
         print(f'Warning: {missing} movies out of {len(user_ratings)} were missing.')
     return user_vector
@@ -283,7 +315,7 @@ def calculate_similarity(user_features: np.array, item_features: np.array, top_K
     return cos_sim, ordered_pos
 
 
-def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, top_K=25,
+def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rating_threshold=3.5, top_K=25,
              limit=100000, use_only_known_ratings=True, print_stats=True):
     """ Depending on use_only_known_ratings we consider all items or only the items the user has rated and hence knows about.
         Limit has to be set to fit all tables in memory.
@@ -303,7 +335,7 @@ def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, t
     relevant_movies_per_user = []
     for i in tqdm(range(num_users), total=num_users, desc='Creating user features'):
         user_rating = create_user_rating_dict(user_ratings[user_ratings['userId'] == i + 1])
-        user_features[i, :] = build_user_feature_vector(user_rating, movie_pos, item_features)
+        user_features[i, :] = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features)
         user_ratings_dicts.append(user_rating)
         relevant_movies_per_user.append({m for m, r in user_rating.items() if r >= rating_threshold})
     # print(user_features)
@@ -356,9 +388,9 @@ def evaluate(item_features: np.array, movie_pos: bidict, rating_threshold=3.5, t
     print(f'Average recall = {np.mean(avg_recalls)}')
     print(f'{len(avg_precisions)} out of {num_users} users were used')
 
-def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict, ignore_seen=False, topK=20):
+def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict, feature_lens: dict, ignore_seen=False, topK=20):
     # build user feature vector
-    user_features = build_user_feature_vector(user_rating, movie_pos, item_features)
+    user_features = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features)
     print(user_features)
 
     # make recommendations
@@ -385,13 +417,14 @@ if __name__ == '__main__':
         print('done')
 
         # extract item features
-        movie_pos, item_features = build_items_feature_vetors(rdf)
+        movie_pos, item_features, feature_lens = build_items_feature_vetors(rdf)
         print(item_features)
     else:
         # load saved features
         print('Loading previously saved features')
-        item_features = np.load('item_features.npy')
-        movie_pos: bidict = load_dict('movie_pos')
+        item_features = np.load(f'item_features{"_wikidata" if use_wikidata else ""}.npy')
+        movie_pos: bidict = load_dict(f'movie_pos{"_wikidata" if use_wikidata else ""}')
+        feature_lens: dict = load_dict(f'feature_lens{"_wikidata" if use_wikidata else ""}')
 
         print(item_features)
 
@@ -404,6 +437,6 @@ if __name__ == '__main__':
         'tt0121766': 4.5
     }
 
-    recommend_for_single_user(user_rating, item_features, movie_pos)
+    recommend_for_single_user(user_rating, item_features, movie_pos, feature_lens)
 
-    evaluate(item_features, movie_pos)
+    evaluate(item_features, movie_pos, feature_lens)
