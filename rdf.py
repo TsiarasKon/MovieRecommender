@@ -74,7 +74,7 @@ def data_loading():
     return movies_df, principals_df
 
 
-def build_and_save_rdf(save=True, limit=None):
+def build_and_save_rdf(save=True, limit=None, prune=True):
     movies_df, principals_df = data_loading()
 
     g = Graph()
@@ -147,12 +147,56 @@ def build_and_save_rdf(save=True, limit=None):
             for s in subjects:
                 if len(s) > 0 and s.startswith('http'): g.add((movie, has_subject, URIRef(s)))
 
+    # Prune graph of unused stuff
+    if prune:
+        prune_rdf_graph(g)
+
     # Save graph
     if save:
         print('Saving graph...')
         g.serialize(destination='movies.nt', format='nt')
 
     return g
+
+
+def prune_rdf_graph(g: Graph, actor_least_movies=3, director_least_movies=5):
+    print('Deleting unused actors...')
+    g.update(
+        """ DELETE { ?m pred:hasActor ?a }
+            WHERE {
+                ?m pred:hasActor ?a .
+                FILTER EXISTS {
+                    SELECT DISTINCT ?a
+                    WHERE {
+                        ?movie pred:hasActor ?a .
+                    }
+                    GROUP BY ?a
+                    HAVING (COUNT(?movie) < """ + str(actor_least_movies) + """)
+                }
+            }
+        """, initNs={'movies': ns_movies,
+                     'genres': ns_genres,
+                     'pred': ns_predicates,
+                     'principals': ns_principals})
+
+    print('Deleting unused directors...')
+    g.update(
+        """ DELETE { ?m ?p ?d }
+            WHERE {
+                ?m pred:hasDirector ?d .
+                FILTER EXISTS {
+                    SELECT DISTINCT ?d
+                    WHERE {
+                        ?movie pred:hasDirector ?d .
+                    }
+                    GROUP BY ?d
+                    HAVING (COUNT(?movie) < """ + str(director_least_movies) + """)
+                    }
+                }
+            """, initNs={'movies': ns_movies,
+                         'genres': ns_genres,
+                         'pred': ns_predicates,
+                         'principals': ns_principals})
 
 
 def load_rdf():
@@ -162,13 +206,18 @@ def load_rdf():
 
 if __name__ == '__main__':
     only_load = True    # load or build from scratch?
+    prune_loaded = False
 
     if only_load:
         print('Loading rdf...')
         g = load_rdf()
         print('done')
+
+        if prune_loaded:
+            prune_rdf_graph(g)
+            print('Saving graph...')
+            g.serialize(destination='movies.nt', format='nt')
     else:
-        # g = build_and_save_rdf(save=False, limit=10)
         g = build_and_save_rdf()
 
     # Test Query
@@ -183,7 +232,3 @@ if __name__ == '__main__':
                          'genres': ns_genres,
                          'pred': ns_predicates,
                          'principals': ns_principals})
-
-    print(f'Results: {len(qres)}')
-    for row in qres:
-        print(row)
