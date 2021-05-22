@@ -32,7 +32,7 @@ def extract_binary_features(actual_values: set, ordered_possible_values: list) -
     return binary_format
 
 
-def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
+def build_items_feature_vetors(rdf: Graph, use_wikidata=True, save=True) -> (dict, np.array):   # list parallel to 2d np array's columns --> the title ID for the row
     """ Builds a feature vector for each movie """
     # get all possible categorical features
     print('Looking up genres...')
@@ -59,7 +59,7 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
     print('Found', len(all_actors), 'actors with at least', LEAST_MOVIES, 'movies made.')
 
     print('Looking up directors...')
-    LEAST_MOVIES2 = 6
+    LEAST_MOVIES2 = 5
     all_directors = rdf.query(
         """ SELECT DISTINCT ?director
             WHERE {
@@ -71,31 +71,103 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
     all_directors = sorted([str(d['director']) for d in all_directors])
     print('Found', len(all_directors), 'directors with at least', LEAST_MOVIES2, 'movies directed.')
 
-    # Query all movies on rdf and their associated features
-    print('Querying movie features...')
-    movies = rdf.query(
-        """SELECT DISTINCT ?movie ?year ?rating
+    # TODO: writers/producers?
+
+    if use_wikidata:
+        LEAST_MOVIES3 = 3
+
+        print('Looking up series...')
+        all_series = rdf.query(
+            """ SELECT DISTINCT ?series
+                WHERE {
+                    ?movie pred:hasSeries ?series . 
+                }
+                GROUP BY ?series
+                HAVING (COUNT(?movie) >= """ + str(LEAST_MOVIES3) + ')',
+            initNs={'pred': ns_predicates})
+        all_series = sorted([str(s['series']) for s in all_series])
+        print('Found', len(all_series), 'series with at least', LEAST_MOVIES3, 'movies.')
+
+        print('Looking up subjects...')
+        all_subjects = rdf.query(
+            """ SELECT DISTINCT ?subject
+                WHERE {
+                    ?movie pred:hasSubject ?subject . 
+                }
+                GROUP BY ?subject
+                HAVING (COUNT(?movie) >= """ + str(LEAST_MOVIES3) + ')',
+            initNs={'pred': ns_predicates})
+        all_subjects = sorted([str(s['subject']) for s in all_subjects])
+        print('Found', len(all_subjects), 'subjects with at least', LEAST_MOVIES3, 'movies.')
+
+        print('Looking up distributors...')
+        all_dists = rdf.query(
+            """ SELECT DISTINCT ?dist
+                WHERE {
+                    ?movie pred:hasDistributor ?dist . 
+                }
+                GROUP BY ?dist
+                HAVING (COUNT(?movie) >= """ + str(LEAST_MOVIES3) + ')',
+            initNs={'pred': ns_predicates})
+        all_dists = sorted([str(d['dist']) for d in all_dists])
+        print('Found', len(all_dists), 'distributors with at least', LEAST_MOVIES3, 'movies.')
+
+        # Query all movies on rdf and their associated features
+        print('Querying movie features...')
+        movies = rdf.query(
+            """SELECT DISTINCT ?movie ?year ?rating
               (group_concat(distinct ?genre; separator=",") as ?genres)
               (group_concat(distinct ?actor; separator=",") as ?actors)
               (group_concat(distinct ?director; separator=",") as ?directors)
-           WHERE { 
+              (group_concat(distinct ?subject; separator=",") as ?subjects)
+              (group_concat(distinct ?serie; separator=",") as ?series)
+              (group_concat(distinct ?dist; separator=",") as ?dists)
+            WHERE { 
               ?movie pred:hasYear ?year .
               ?movie pred:hasRating ?rating .
               ?movie pred:hasGenre ?genre .
               ?movie pred:hasDirector ?director .
               ?movie pred:hasActor ?actor .
-           } 
-           GROUP BY ?movie ?year ?rating""",
-        initNs={'movies': ns_movies,
-                'genres': ns_genres,
-                'pred': ns_predicates,
-                'principals': ns_principals})
+              OPTIONAL { ?movie pred:hasSubject ?subject_temp . }
+              OPTIONAL { ?movie pred:hasSeries ?serie_temp . }
+              OPTIONAL { ?movie pred:hasDistributor ?dist_temp . }
+              BIND(COALESCE(?subject_temp, "") AS ?subject)
+              BIND(COALESCE(?serie_temp, "") AS ?serie)
+              BIND(COALESCE(?dist_temp, "") AS ?dist)
+            } 
+            GROUP BY ?movie ?year ?rating""",
+            initNs={'movies': ns_movies,
+                    'genres': ns_genres,
+                    'pred': ns_predicates,
+                    'principals': ns_principals})
+    else:
+        # Query all movies on rdf and their associated features
+        print('Querying movie features...')
+        movies = rdf.query(
+            """SELECT DISTINCT ?movie ?year ?rating
+                  (group_concat(distinct ?genre; separator=",") as ?genres)
+                  (group_concat(distinct ?actor; separator=",") as ?actors)
+                  (group_concat(distinct ?director; separator=",") as ?directors)
+               WHERE { 
+                  ?movie pred:hasYear ?year .
+                  ?movie pred:hasRating ?rating .
+                  ?movie pred:hasGenre ?genre .
+                  ?movie pred:hasDirector ?director .
+                  ?movie pred:hasActor ?actor .
+               } 
+               GROUP BY ?movie ?year ?rating""",
+            initNs={'movies': ns_movies,
+                    'genres': ns_genres,
+                    'pred': ns_predicates,
+                    'principals': ns_principals})
     print('Done.')
 
     NUM_FEATURES = 2 + len(all_genres) + len(all_actors) + len(all_directors)  # TODO
+    if use_wikidata:
+        NUM_FEATURES += len(all_series) + len(all_subjects) + len(all_dists)
     movie_pos: bidict = bidict({})
 
-    print('Allocating memory...')
+    print(f'Allocating memory for {len(movies)} x {NUM_FEATURES} array...')
     item_features = np.zeros((len(movies), NUM_FEATURES), dtype=np.float32)   # takes too long :(
 
     print('Creating item feature matrix...')
@@ -111,19 +183,33 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
         genres = set(movie_data['genres'].split(','))
         actors = set(movie_data['actors'].split(','))
         directors = set(movie_data['directors'].split(','))
+        if use_wikidata:
+            series = set(movie_data['series'].split(','))
+            subjects = set(movie_data['subjects'].split(','))
+            dists = set(movie_data['dists'].split(','))
+
         with warnings.catch_warnings():
             # hide user warnings about ignoredmissing values, ignoring these values is the desired behaviour
             warnings.simplefilter("ignore")
             genres_feat = extract_binary_features(genres, all_genres)
             actors_feat = extract_binary_features(actors, all_actors)
             directors_feat = extract_binary_features(directors, all_directors)
+            if use_wikidata:
+                series_feat = extract_binary_features(series, all_series)
+                subjects_feat = extract_binary_features(subjects, all_subjects)
+                dists_feat = extract_binary_features(dists, all_dists)
 
-        # TODO: Concat all of them into one big feature vector
+        # Concat all of them into one big feature vector
         item_features[i, 0] = rating
         item_features[i, 1] = year
         item_features[i, 2: 2 + len(all_genres)] = genres_feat
         item_features[i, 2 + len(all_genres): 2 + len(all_genres) + len(all_actors)] = actors_feat
-        item_features[i, 2 + len(all_genres) + len(all_actors):] = directors_feat
+        item_features[i, 2 + len(all_genres) + len(all_actors): 2 + len(all_genres) + len(all_actors) + len(all_directors)] = directors_feat
+        if use_wikidata:
+            last = 2 + len(all_genres) + len(all_actors) + len(all_directors)
+            item_features[i, last: last + len(all_series)] = series_feat
+            item_features[i, last + len(all_series): last + len(all_series) + len(all_subjects)] = subjects_feat
+            item_features[i, last + len(all_series) + len(all_subjects):] = dists_feat
 
     # save the result
     if save:
@@ -303,6 +389,7 @@ if __name__ == '__main__':
         print(item_features)
     else:
         # load saved features
+        print('Loading previously saved features')
         item_features = np.load('item_features.npy')
         movie_pos: bidict = load_dict('movie_pos')
 
