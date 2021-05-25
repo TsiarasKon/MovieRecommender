@@ -261,7 +261,8 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, feature_len
         except KeyError:
             missing += 1
     # take the average
-    user_vector /= count
+    if count > 0:
+        user_vector /= count
     # manually overwrite the first feature to be 1.0 (the max value) as the desired IMDb rating (TODO)
     if override_rating_to_best:
         user_vector[0] = 1.0 * w_rating
@@ -388,23 +389,29 @@ def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rat
     print(f'Average recall = {np.mean(avg_recalls)}')
     print(f'{len(avg_precisions)} out of {num_users} users were used')
 
-def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict, feature_lens: dict, ignore_seen=False, topK=20):
+def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict, feature_lens: dict, ignore_seen=False, topK=20, verbose=True):
     # build user feature vector
-    user_features = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features)
-    print(user_features)
+    user_features = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features, verbose=True)
+    print('user_features =', user_features)
 
     # make recommendations
     item_features = 2 * item_features - 1
     cos_sim, items_pos = calculate_similarity(user_features, item_features, top_K=None if ignore_seen else topK)
     print('min:', min(cos_sim), 'max:', max(cos_sim))
     k = 1
+
+    recommendations = []
     for pos in items_pos:
         movie_id = movie_pos.inverse[pos]
         if ignore_seen and movie_id in user_rating:
             continue
-        print(f'{k}.', movie_id, 'with similarity', cos_sim[pos], '(seen)' if movie_id in user_rating else '')
+        recommendations.append({'tconst': movie_id, 'similarity': cos_sim[pos]})
+        if verbose:
+            print(f'{k}.', movie_id, 'with similarity', cos_sim[pos], '(seen)' if movie_id in user_rating else '')
         k += 1
         if k > topK: break
+
+    return recommendations
 
 
 if __name__ == '__main__':
