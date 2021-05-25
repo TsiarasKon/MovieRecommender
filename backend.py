@@ -7,7 +7,7 @@ from recommendation import recommend_for_single_user, use_wikidata
 from utils import load_dict
 
 app = flask.Flask('movie_recommender_backend')
-app.config["DEBUG"] = True
+app.config["DEBUG"] = False
 
 # Should we not recommend movies that the user has already seen
 ignore_seen = True
@@ -21,8 +21,8 @@ def post_answer():
 
     # decode JSON input
     user_ratings = {}
-    for rating in input_json['movieRating']:
-        user_ratings[rating['tconst']] = rating['rating']
+    for rating in input_json['movieRatings']:
+        user_ratings[rating['tconst']] = rating['userRating']
     topK = input_json['recommendationsNum']
 
     if app.config["DEBUG"]:

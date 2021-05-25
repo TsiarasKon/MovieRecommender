@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Input, Rate, Space, Table, Tag } from 'antd';
+import { Button, Col, Input, Rate, Row, Space, Table, Tag } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import MoviesData from "./data/movies.json";
 import Movie from './types';
@@ -116,11 +116,15 @@ function MovieTableComponent() {
 
   return (
     <div>
-      <div style={{ margin: 0, transform: 'scaleY(0.9)'}}>
-        <Table dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
-      </div>
-      <Button type="primary" shape="round" style={{ margin: 10 }} onClick={() => console.log(movies.filter(m => !!m.userRating))}>Console.log() all ratings!</Button>
-      <RecommendationsComponent movies={movies.filter(m => !!m.userRating)} />
+      <Row justify="space-between">
+        <Col span={18}>
+          <Table dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
+        </Col>
+        <Col span={5}>
+          <RecommendationsComponent ratedMovies={movies.filter(m => !!m.userRating)} allMovies={AllMovies} />
+        </Col>
+      </Row>
+      {/* <Button type="primary" shape="round" style={{ margin: 10 }} onClick={() => console.log(movies.filter(m => !!m.userRating))}>Console.log() all ratings!</Button> */}
     </div>
   );
 }

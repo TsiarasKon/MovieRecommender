@@ -3,8 +3,8 @@ import RecommendationsComponent from './recommendations';
 
 function App() {
   return (
-    <div style={{width: '90%', margin: '0 auto 0 auto',}}>
-      <div style={{textAlign: 'center'}}><h1>Movie Recommender</h1></div>
+    <div style={{ width: '90%', margin: '0 auto 0 auto' }}>
+      <div style={{ textAlign: 'center', paddingTop: 10 }}><h1>Movie Recommender</h1></div>
       <MovieTableComponent />
     </div>
   );
