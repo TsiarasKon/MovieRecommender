@@ -11,47 +11,56 @@ default_retry_after = 0.5
 
 
 def response_to_df(response_list):
-    movieid_list = []
-    movielabel_list = []        # TODO: remove?
+    tconst_list = []
     series_list = []
     distributors_list = []
     subject_list = []
-    boxoffice_list = []        # TODO: keep max?
     for entity in response_list:
-        if not entity['series']['value'] and not entity['distributors']['value'] and not entity['subject']['value'] and not entity['boxoffice']['value']:
+        if not entity['series']['value'] and not entity['distributors']['value'] and not entity['subject']['value']:
             continue
-        movieid_list.append(entity['movieid']['value'])
-        movielabel_list.append(entity['movieLabel']['value'])
+        tconst_list.append(entity['tconst']['value'])
         series_list.append(entity['series']['value'])
         distributors_list.append(entity['distributors']['value'])
         subject_list.append(entity['subject']['value'])
-        boxoffice_list.append(entity['boxoffice']['value'])
-    return pd.DataFrame({'tconst': movieid_list, 'movie': movielabel_list, 'series': series_list, 'distributors': distributors_list, 'boxoffice': boxoffice_list, 'subject': subject_list})
+    return pd.DataFrame({'tconst': tconst_list, 'series': series_list, 'distributors': distributors_list, 'subject': subject_list})
 
 
 def query_wikidata(imdb_ids_list):
-    query = """SELECT ?movieid ?movieLabel
-      (group_concat(distinct ?seriesLabel; separator="; ") as ?series)
-      (group_concat(distinct ?distributorsLabel; separator="; ") as ?distributors)
-      (group_concat(distinct ?subjectLabel; separator="; ") as ?subject)
-      (group_concat(distinct ?boxofficeLabel; separator="; ") as ?boxoffice)
+    # query = """SELECT ?movieid ?movieLabel
+    #   (group_concat(distinct ?seriesLabel; separator="; ") as ?series)
+    #   (group_concat(distinct ?distributorsLabel; separator="; ") as ?distributors)
+    #   (group_concat(distinct ?subjectLabel; separator="; ") as ?subject)
+    #   (group_concat(distinct ?boxofficeLabel; separator="; ") as ?boxoffice)
+    # WHERE {
+    #   VALUES ?movieid { "%s" }
+    #   ?movie wdt:P345 ?movieid .
+    #   OPTIONAL { ?movie wdt:P179 ?series . }
+    #   OPTIONAL { ?movie wdt:P750 ?distributors . }
+    #   OPTIONAL { ?movie wdt:P921 ?subject . }
+    #   OPTIONAL { ?movie wdt:P2142 ?boxoffice . }
+    #   SERVICE wikibase:label {
+    #     bd:serviceParam wikibase:language "en".
+    #     ?movie rdfs:label ?movieLabel .
+    #     ?series rdfs:label ?seriesLabel .
+    #     ?distributors rdfs:label ?distributorsLabel .
+    #     ?subject rdfs:label ?subjectLabel .
+    #     ?boxoffice rdfs:label ?boxofficeLabel .
+    #   }
+    # }
+    # GROUP BY ?movieid ?movieLabel""" % '" "'.join(imdb_ids_list)
+
+    query = """SELECT ?tconst
+      (group_concat(distinct ?seriesID; separator="; ") as ?series)
+      (group_concat(distinct ?distributorsID; separator="; ") as ?distributors)
+      (group_concat(distinct ?subjectID; separator="; ") as ?subject)
     WHERE {
-      VALUES ?movieid { "%s" }
-      ?movie wdt:P345 ?movieid .
-      OPTIONAL { ?movie wdt:P179 ?series . }
-      OPTIONAL { ?movie wdt:P750 ?distributors . }
-      OPTIONAL { ?movie wdt:P921 ?subject . }
-      OPTIONAL { ?movie wdt:P2142 ?boxoffice . }
-      SERVICE wikibase:label { 
-        bd:serviceParam wikibase:language "en". 
-        ?movie rdfs:label ?movieLabel . 
-        ?series rdfs:label ?seriesLabel . 
-        ?distributors rdfs:label ?distributorsLabel .
-        ?subject rdfs:label ?subjectLabel . 
-        ?boxoffice rdfs:label ?boxofficeLabel . 
-      }
+      VALUES ?tconst { "%s" }
+      ?movieID wdt:P345 ?tconst .
+      OPTIONAL { ?movieID wdt:P179 ?seriesID . }
+      OPTIONAL { ?movieID wdt:P750 ?distributorsID . }
+      OPTIONAL { ?movieID wdt:P921 ?subjectID . }
     }
-    GROUP BY ?movieid ?movieLabel""" % '" "'.join(imdb_ids_list)
+    GROUP BY ?tconst""" % '" "'.join(imdb_ids_list)
 
     response = requests.get(wikidata_endpoint, params={'format': 'json', 'query': query})
     if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
