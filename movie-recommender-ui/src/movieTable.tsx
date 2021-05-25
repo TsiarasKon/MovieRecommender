@@ -6,10 +6,12 @@ import Movie from './types';
 import { loadJsonData, sorterStringCompare } from './utils';
 import { FilterDropdownProps } from 'antd/lib/table/interface';
 import { AllGenres } from './constantData';
+import RecommendationsComponent from './recommendations';
 
 function MovieTableComponent() {
   const AllMovies: Movie[] = JSON.parse(loadJsonData(MoviesData));
   const [movies, setMovies] = useState(AllMovies)
+  const defaultPageSize = 10
 
   const [searchText, setSearchText] = useState('');  // eslint-disable-line @typescript-eslint/no-unused-vars
 
@@ -114,8 +116,11 @@ function MovieTableComponent() {
 
   return (
     <div>
+      <div style={{ margin: 0, transform: 'scaleY(0.9)'}}>
+        <Table dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
+      </div>
       <Button type="primary" shape="round" style={{ margin: 10 }} onClick={() => console.log(movies.filter(m => !!m.userRating))}>Console.log() all ratings!</Button>
-      <Table dataSource={movies} columns={columns} pagination={{ defaultPageSize: 20 }} />
+      <RecommendationsComponent movies={movies.filter(m => !!m.userRating)} />
     </div>
   );
 }
