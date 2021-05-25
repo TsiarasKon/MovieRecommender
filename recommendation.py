@@ -15,15 +15,17 @@ max_year = 2020
 min_year = 1975
 
 
-use_wikidata = True
+use_wikidata = True              # use extra features from wikidata or not
+load_item_features = True        # load previously constructed features or extract them from rdf
 
 
 """ HYPERPARAMETERS """
 override_rating_to_best = True
-temperature = 50         # boost for categorical feature to be more towards -1 and 1
-clip = True              # TODO: Should we clip feature-vectors? Only the direction of the final vectors matters. Larger numbers send the vector more towards that direction.
+temperature = 50         # boost for categorical features to be more towards their clipping values (e.g. -1 and 1) so e.g. less good reviews are need to reach the maximum value for an actor.
+clip = True
 
-# weights (higher weight -> more important), we don't want numerical features to get overshadowed by categorical ones # TODO: if the weights change we have to rebuild the graph
+# weights (higher weight -> more important), we don't want numerical features to get overshadowed by categorical ones
+# TODO: if the weights change we have to rebuild the graph
 w_rating = 1
 w_date = 1
 w_genres = 1
@@ -263,7 +265,7 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, feature_len
     # take the average
     if count > 0:
         user_vector /= count
-    # manually overwrite the first feature to be 1.0 (the max value) as the desired IMDb rating (TODO)
+    # manually overwrite the first feature to be 1.0 (the max value) as the desired IMDb rating
     if override_rating_to_best:
         user_vector[0] = 1.0 * w_rating
     # clip vector to maximum 1 and minimum -1 to optimize cosine similarity
@@ -389,6 +391,7 @@ def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rat
     print(f'Average recall = {np.mean(avg_recalls)}')
     print(f'{len(avg_precisions)} out of {num_users} users were used')
 
+
 def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict, feature_lens: dict, ignore_seen=False, topK=20, verbose=True):
     # build user feature vector
     user_features = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features, verbose=True)
@@ -415,8 +418,6 @@ def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_
 
 
 if __name__ == '__main__':
-    load_item_features = True
-
     if not load_item_features:
         # load rdf
         print('Loading rdf...')
