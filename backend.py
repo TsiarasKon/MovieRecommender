@@ -7,7 +7,7 @@ from recommendation import recommend_for_single_user, use_wikidata
 from utils import load_dict
 
 app = flask.Flask('movie_recommender_backend')
-app.config["DEBUG"] = False
+app.config["DEBUG"] = True
 
 # Should we not recommend movies that the user has already seen
 ignore_seen = True

@@ -7,7 +7,7 @@ import { chunks } from './utils';
 
 const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Movie[], allMovies: Movie[] }) => {
 
-  const [recommendedMovies, setRecommendedMovies] = useState([]);
+  const [recommendedMovies, setRecommendedMovies] = useState<Movie[]>([]);
   const carouselMoviesArray = [...chunks(recommendedMovies, 4)] as Movie[][]
   console.log(carouselMoviesArray)
 
@@ -16,34 +16,37 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        movieRatings: ratedMovies,
+        movieRatings: ratedMovies.map(m => ({ tconst: m.tconst, userRating: m.userRating })),
         recommendationsNum: 10
       })
     };
     console.log("Sending request with body: ", requestOptions.body)
     fetch('/recommend', requestOptions)
       .then(response => response.json())
-      .then(data => console.log(data))
-      // .then(data => setRecommendedMovies())
+      .then(data => {
+        const recommendedTconstArr = data.map((el: any) => el.tconst);
+        setRecommendedMovies(allMovies.filter(m => recommendedTconstArr.includes(m.tconst)));
+      })
+      .then(_ => console.log(recommendedMovies))
   }
 
-  // useEffect(() => getRecommendations(), []);
+  useEffect(() => getRecommendations(), [ratedMovies]);
 
-  // const ratedMovies = carouselMoviesArray.map(mArr =>
-  //   <div>
-  //     {mArr.map(m =>
-  //       <Card title={m.primaryTitle} bordered={true} style={{ height: '20%', paddingRight: 20 }}>
-  //         {m.tconst}
-  //       </Card>
-  //     )}
-  //   </div>
-  // );
+  const ratedMoviesCards = carouselMoviesArray.map(mArr =>
+    <div>
+      {mArr.map(m =>
+        <Card title={m.primaryTitle} bordered={true} style={{ height: '20%', paddingRight: 20 }}>
+          {m.tconst}
+        </Card>
+      )}
+    </div>
+  );
 
   return (
     <div className="site-card-wrapper" style={{ background: "lightgray", padding: 20, height: 1000 }}>
       <h2 style={{ textAlign: "center" }}>Recommendations</h2>
       <Carousel dotPosition="right">
-        {ratedMovies}
+        {ratedMoviesCards}
       </Carousel>
       {/* {getRecommendations().m =>
         <Card title={m.primaryTitle} bordered={true} style={{ height: '20%', paddingRight: 20 }}>
