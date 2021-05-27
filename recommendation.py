@@ -21,11 +21,12 @@ load_item_features = True        # load previously constructed features or extra
 
 """ HYPERPARAMETERS """
 override_rating_to_best = True
+use_median_for_year = False
 temperature = 50         # boost for categorical features to be more towards their clipping values (e.g. -1 and 1) so e.g. less good reviews are need to reach the maximum value for an actor.
 clip = True
 
 # weights (higher weight -> more important), we don't want numerical features to get overshadowed by categorical ones
-# TODO: if the weights change we have to rebuild the graph
+# Note: if the weights change we have to rebuild the graph! So set load_item_features = False.
 w_rating = 1
 w_date = 1
 w_genres = 1
@@ -83,7 +84,7 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
     all_directors = sorted([str(d['director']) for d in all_directors])
     print('Found', len(all_directors), 'directors with at least', LEAST_MOVIES2, 'movies directed.')
 
-    # TODO: writers/producers?
+    # TODO: Add writers/producers?
 
     if use_wikidata:
         LEAST_MOVIES3 = 3
@@ -176,7 +177,7 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
         print('Done.')
 
     feature_lens: dict = {}
-    NUM_FEATURES = 2 + len(all_genres) + len(all_actors) + len(all_directors)  # TODO
+    NUM_FEATURES = 2 + len(all_genres) + len(all_actors) + len(all_directors)
     feature_lens['genres'] = len(all_genres)
     feature_lens['actors'] = len(all_actors)
     feature_lens['directors'] = len(all_directors)
@@ -244,30 +245,36 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
 
 
 def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, feature_lens: dict, item_features: np.array, temperature=temperature,
-                              override_rating_to_best=override_rating_to_best, clip=clip, verbose=False):
+                              override_rating_to_best=override_rating_to_best, use_median_for_year=use_median_for_year, clip=clip, verbose=False):
     """ Takes as input a user's ratings on IMDb titles and construct its user vector """
-    # TODO: temperature of 50 - 100 gave better MAP
-    # Note: higher temperature helps have higher values (closer to 1 and -1) when too many features are needed to even come close
-    avg_rating = 2.5    # TODO: use this as average or a user average? Or maybe the minimum of the two?
+    # Note: higher temperature helps have higher values (e.g. closer to 1 and -1) because typically we might get very low numbers
+    avg_rating = 2.5
     user_vector = np.zeros(item_features.shape[1], dtype=np.float64)
     missing = 0
     count = 0
+    years = []
     for movie_id, rating in user_ratings.items():
         try:
             pos = movie_pos[movie_id]
             # take the normal average for numerical features
             user_vector[:2] += item_features[pos, :2]
+            if use_median_for_year:
+                years.append(item_features[pos, 1])
             # use weights based on rating for categorical features
-            user_vector[2:] += temperature * ((rating - avg_rating) / avg_rating) * item_features[pos, 2:]
+            user_vector[2:] += ((rating - avg_rating) / avg_rating) * item_features[pos, 2:]
             count += 1
         except KeyError:
             missing += 1
     # take the average
     if count > 0:
         user_vector /= count
+    user_vector[2:] *= temperature
     # manually overwrite the first feature to be 1.0 (the max value) as the desired IMDb rating
     if override_rating_to_best:
         user_vector[0] = 1.0 * w_rating
+    # use median for year in order to avoid situations where the mean is nowhere near the most movies the user watches
+    if use_median_for_year:
+        user_vector[1] = np.median(years)
     # clip vector to maximum 1 and minimum -1 to optimize cosine similarity
     if clip:
         # clip separately each feature based on weight
@@ -313,8 +320,6 @@ def calculate_similarity(user_features: np.array, item_features: np.array, top_K
             keep = np.count_nonzero(cos_sim >= threshold)
             ordered_pos = ordered_pos[:, :keep]
 
-    # TODO (EXTRA): Can we speed this up with black-box LSH or something?
-
     return cos_sim, ordered_pos
 
 
@@ -350,12 +355,11 @@ def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rat
         print('Average non_zero features in user_features are:', f'{mean:.2f}', 'out of', item_features.shape[1], f'({100 * mean / item_features.shape[1]:.2f}%)')
 
     print('Calculating similarity...')
-    item_features = 2 * item_features - 1   # TODO: use this or not?  -> it improves MAP and recall so yes?
+    item_features = 2 * item_features - 1
     cos_sim, ordered_pos = calculate_similarity(user_features, item_features, top_K=top_K if not use_only_known_ratings else None)
     # print(cos_sim)
 
-    # Source: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
-    # TODO: train-test split how?
+    # Formula from: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html
     avg_recalls = []
     avg_precisions = []
     for i in tqdm(range(num_users), total=num_users, desc='Calculating MAP and recall'):
