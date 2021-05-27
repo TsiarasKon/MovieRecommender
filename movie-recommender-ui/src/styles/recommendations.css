@@ -11,6 +11,13 @@
 
 .movie-card {
     margin: 20px 30px 0 20px !important;
+    cursor: pointer;
+    display: block;
+    background-color: whitesmoke !important;
+}
+
+.movie-card:hover {
+    background-color: white !important;
 }
 
 .recommended-container {

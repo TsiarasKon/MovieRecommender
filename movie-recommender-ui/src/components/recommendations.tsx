@@ -60,23 +60,25 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
   );
 
   const recommendedMoviesCards = recommendedMovies.map(m =>
-    <Card
-      title={<Skeleton title paragraph={false} loading={!!responsesWaitingNum} active>{m.primaryTitle}</Skeleton>}
-      bordered={true} className="movie-card"
-      key={m.tconst}
-    >
-      <Skeleton title={false} paragraph={{ rows: 2 }} loading={!!responsesWaitingNum} active>
-        Year: <strong>{m.startYear}</strong>
-        <br />
-      Rating: <strong>{m.averageRating}</strong> <i>({m.numVotes} votes)</i>
-        <br />
-      Genres: {m.genres && (m.genres as unknown as string).split(',').map((g: string) =>
-          <Tag key={g} style={{ margin: 2 }}>
-            {g}
-          </Tag>)
-        }
-      </Skeleton>
-    </Card>
+    <a href={'https://www.imdb.com/title/' + m.tconst} style={{display: 'block'}} target={"_blank"}>
+      <Card
+        title={<Skeleton title paragraph={false} loading={!!responsesWaitingNum} active>{m.primaryTitle}</Skeleton>}
+        bordered={true} className="movie-card"
+        key={m.tconst}
+      >
+        <Skeleton title={false} paragraph={{ rows: 2 }} loading={!!responsesWaitingNum} active>
+          Year: <strong>{m.startYear}</strong>
+          <br />
+        Rating: <strong>{m.averageRating}</strong> <i>({m.numVotes} votes)</i>
+          <br />
+        Genres: {m.genres && (m.genres as unknown as string).split(',').map((g: string) =>
+            <Tag key={g} style={{ margin: 2 }}>
+              {g}
+            </Tag>)
+          }
+        </Skeleton>
+      </Card>
+    </a>
   );
 
   return (
