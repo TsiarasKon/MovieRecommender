@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Card, Carousel, Tag } from 'antd';
+import { Card, Carousel, Skeleton, Tag } from 'antd';
 import Movie from '../types';
 import { chunks } from '../utils';
 import '../styles/recommendations.css';
 
 const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Movie[], allMovies: Movie[] }) => {
-
   const [recommendedMovies, setRecommendedMovies] = useState<Movie[]>([]);
+  const [loadingFlag, setLoadingFlag] = useState(false);
 
   const getRecommendations = useCallback((): void => {
+    if (!ratedMovies.length) return;
+    setLoadingFlag(true);
     const requestOptions = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -24,6 +26,7 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
         console.log("Got response: ", data);
         const recommendedTconstArr = data.map((el: any) => el.tconst);
         setRecommendedMovies(allMovies.filter(m => recommendedTconstArr.includes(m.tconst)));
+        setLoadingFlag(false);
       })
   }, [ratedMovies, allMovies]);
 
@@ -48,16 +51,21 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
   );
 
   const recommendedMoviesCards = recommendedMovies.map(m =>
-    <Card title={m.primaryTitle} bordered={true} className="movie-card">
-      Year: <strong>{m.startYear}</strong>
-      <br />
+    <Card
+      title={<Skeleton title paragraph={false} loading={loadingFlag} active>{m.primaryTitle}</Skeleton>}
+      bordered={true} className="movie-card"
+    >
+      <Skeleton title={false} paragraph={{ rows: 2 }} loading={loadingFlag} active>
+        Year: <strong>{m.startYear}</strong>
+        <br />
       Rating: <strong>{m.averageRating}</strong> <i>({m.numVotes} votes)</i>
-      <br />
+        <br />
       Genres: {m.genres && (m.genres as unknown as string).split(',').map((g: string) =>
-        <Tag key={g} style={{ margin: 2 }}>
-          {g}
-        </Tag>)
-      }
+          <Tag key={g} style={{ margin: 2 }}>
+            {g}
+          </Tag>)
+        }
+      </Skeleton>
     </Card>
   );
 
