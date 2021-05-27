@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Card, Carousel, Skeleton, Tag } from 'antd';
+import { Card, Carousel, Skeleton, Spin, Tag } from 'antd';
 import Movie from '../types';
 import { chunks } from '../utils';
 import '../styles/recommendations.css';
 
 const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Movie[], allMovies: Movie[] }) => {
   const [recommendedMovies, setRecommendedMovies] = useState<Movie[]>([]);
-  const [loadingFlag, setLoadingFlag] = useState(false);
+  const [responsesWaitingNum, setResponsesWaitingNum] = useState(0);
 
   const getRecommendations = useCallback((): void => {
     if (!ratedMovies.length) return;
-    setLoadingFlag(true);
+    setResponsesWaitingNum(prev => prev + 1);
     const requestOptions = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -26,8 +26,12 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
         console.log("Got response: ", data);
         const recommendedTconstArr = data.map((el: any) => el.tconst);
         setRecommendedMovies(allMovies.filter(m => recommendedTconstArr.includes(m.tconst)));
-        setLoadingFlag(false);
+        setResponsesWaitingNum(prev => prev - 1);
       })
+      .catch(error => {
+        console.log("Got error: ", error);
+        setResponsesWaitingNum(prev => prev - 1);
+      });
   }, [ratedMovies, allMovies]);
 
   useEffect(() => getRecommendations(), [getRecommendations]);
@@ -52,10 +56,10 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
 
   const recommendedMoviesCards = recommendedMovies.map(m =>
     <Card
-      title={<Skeleton title paragraph={false} loading={loadingFlag} active>{m.primaryTitle}</Skeleton>}
+      title={<Skeleton title paragraph={false} loading={!!responsesWaitingNum} active>{m.primaryTitle}</Skeleton>}
       bordered={true} className="movie-card"
     >
-      <Skeleton title={false} paragraph={{ rows: 2 }} loading={loadingFlag} active>
+      <Skeleton title={false} paragraph={{ rows: 2 }} loading={!!responsesWaitingNum} active>
         Year: <strong>{m.startYear}</strong>
         <br />
       Rating: <strong>{m.averageRating}</strong> <i>({m.numVotes} votes)</i>
@@ -75,9 +79,13 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
       {/* <Carousel dotPosition="right" infinite={false}>
         {recommendedMoviesCards}
       </Carousel> */}
-      <div className="recommended-container">
-        {recommendedMoviesCards}
-      </div>
+      {recommendedMoviesCards.length ?
+        <div className="recommended-container">
+          {recommendedMoviesCards}
+        </div>
+        :
+        !!responsesWaitingNum && <Spin size="large" style={{ margin: '45%' }} />
+      }
     </div>
   );
 }
