@@ -1,19 +1,18 @@
-import React, { useState } from 'react';
-import { Button, Col, Input, Rate, Row, Space, Table, Tag } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Button, Input, Rate, Space, Table, Tag } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import MoviesData from "../data/movies.json";
 import Movie from '../types';
-import { loadJsonData, sorterStringCompare } from '../utils';
+import { sorterStringCompare } from '../utils';
 import { FilterDropdownProps } from 'antd/lib/table/interface';
 import { AllGenres } from '../constantData';
-import RecommendationsComponent from './recommendations';
 
-function MovieTableComponent() {
-  const AllMovies: Movie[] = JSON.parse(loadJsonData(MoviesData));
-  const [movies, setMovies] = useState(AllMovies)
+const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[], setParentMovies: (newMovies: Movie[]) => void }) => {
   const defaultPageSize = 10
 
+  const [movies, setMovies] = useState(allMovies);
   const [searchText, setSearchText] = useState('');  // eslint-disable-line @typescript-eslint/no-unused-vars
+
+  useEffect(() => setMovies(allMovies), [allMovies]);
 
   const handleSearch = (selectedKeys: any, confirm: any): void => {
     confirm();
@@ -109,22 +108,17 @@ function MovieTableComponent() {
       sorter: (a: Movie, b: Movie) => (a.userRating ?? 0) - (b.userRating ?? 0),
       render: (userRating: number, record: Movie) =>
         <Rate allowHalf value={userRating} key={record.tconst} onChange={
-          (value: number) => setMovies(movies.map(m => (m.tconst === record.tconst ? { ...m, userRating: value } : m)))
+          (value: number) => {
+            const newMovies = movies.map(m => (m.tconst === record.tconst ? { ...m, userRating: value } : m));
+            // setMovies(newMovies);    // this is unnecessary due to the useEffect hook above
+            setParentMovies(newMovies);
+          }
         } />
     },
   ];
 
   return (
-    <div>
-      <Row justify="space-between">
-        <Col span={17}>
-          <Table dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
-        </Col>
-        <Col span={6}>
-          <RecommendationsComponent ratedMovies={movies.filter(m => !!m.userRating)} allMovies={AllMovies} />
-        </Col>
-      </Row>
-    </div>
+    <Table dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
   );
 }
 
