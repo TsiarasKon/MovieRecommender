@@ -1,5 +1,4 @@
 import MovieTableComponent from './movieTable';
-import RecommendationsComponent from './recommendations';
 
 function App() {
   return (

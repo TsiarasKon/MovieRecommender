@@ -117,14 +117,13 @@ function MovieTableComponent() {
   return (
     <div>
       <Row justify="space-between">
-        <Col span={18}>
+        <Col span={17}>
           <Table dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
         </Col>
-        <Col span={5}>
+        <Col span={6}>
           <RecommendationsComponent ratedMovies={movies.filter(m => !!m.userRating)} allMovies={AllMovies} />
         </Col>
       </Row>
-      {/* <Button type="primary" shape="round" style={{ margin: 10 }} onClick={() => console.log(movies.filter(m => !!m.userRating))}>Console.log() all ratings!</Button> */}
     </div>
   );
 }

@@ -1,17 +1,14 @@
-import { Row, Col, Card, Carousel } from 'antd';
-import React, { useEffect, useState } from 'react';
-import MovieTableComponent from './movieTable';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Card, Carousel, Tag } from 'antd';
 import Movie from './types';
 import { chunks } from './utils';
-
+import './recommendations.css';
 
 const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Movie[], allMovies: Movie[] }) => {
 
   const [recommendedMovies, setRecommendedMovies] = useState<Movie[]>([]);
-  const carouselMoviesArray = [...chunks(recommendedMovies, 4)] as Movie[][]
-  console.log(carouselMoviesArray)
 
-  const getRecommendations = (): void => {
+  const getRecommendations = useCallback((): void => {
     const requestOptions = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -24,35 +21,55 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
     fetch('/recommend', requestOptions)
       .then(response => response.json())
       .then(data => {
+        console.log("Got response: ", data);
         const recommendedTconstArr = data.map((el: any) => el.tconst);
         setRecommendedMovies(allMovies.filter(m => recommendedTconstArr.includes(m.tconst)));
       })
-      .then(_ => console.log(recommendedMovies))
-  }
+  }, [ratedMovies, allMovies]);
 
-  useEffect(() => getRecommendations(), [ratedMovies]);
+  useEffect(() => getRecommendations(), [getRecommendations]);
 
-  const ratedMoviesCards = carouselMoviesArray.map(mArr =>
+  const recommendedMoviesCarouselCards = ([...chunks(recommendedMovies, 4)] as Movie[][]).map(mArr =>
     <div>
       {mArr.map(m =>
-        <Card title={m.primaryTitle} bordered={true} style={{ height: '20%', paddingRight: 20 }}>
-          {m.tconst}
+        <Card title={m.primaryTitle} bordered={true}>
+          Year: <strong>{m.startYear}</strong>
+          <br />
+          Rating: <strong>{m.averageRating}</strong> <i>({m.numVotes} votes)</i>
+          <br />
+          Genres: {m.genres && (m.genres as unknown as string).split(',').map((g: string) =>
+            <Tag key={g} style={{ margin: 2 }}>
+              {g}
+            </Tag>)
+          }
         </Card>
       )}
     </div>
   );
 
+  const recommendedMoviesCards = recommendedMovies.map(m =>
+    <Card title={m.primaryTitle} bordered={true} className="movie-card">
+      Year: <strong>{m.startYear}</strong>
+      <br />
+      Rating: <strong>{m.averageRating}</strong> <i>({m.numVotes} votes)</i>
+      <br />
+      Genres: {m.genres && (m.genres as unknown as string).split(',').map((g: string) =>
+        <Tag key={g} style={{ margin: 2 }}>
+          {g}
+        </Tag>)
+      }
+    </Card>
+  );
+
   return (
-    <div className="site-card-wrapper" style={{ background: "lightgray", padding: 20, height: 1000 }}>
+    <div className="recommended-section">
       <h2 style={{ textAlign: "center" }}>Recommendations</h2>
-      <Carousel dotPosition="right">
-        {ratedMoviesCards}
-      </Carousel>
-      {/* {getRecommendations().m =>
-        <Card title={m.primaryTitle} bordered={true} style={{ height: '20%', paddingRight: 20 }}>
-          {m.tconst}
-        </Card>
-      } */}
+      {/* <Carousel dotPosition="right" infinite={false}>
+        {recommendedMoviesCards}
+      </Carousel> */}
+      <div className="recommended-container">
+        {recommendedMoviesCards}
+      </div>
     </div>
   );
 }
