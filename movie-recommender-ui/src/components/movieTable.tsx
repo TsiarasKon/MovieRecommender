@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Button, Col, Input, Rate, Row, Space, Table, Tag } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import MoviesData from "./data/movies.json";
-import Movie from './types';
-import { loadJsonData, sorterStringCompare } from './utils';
+import MoviesData from "../data/movies.json";
+import Movie from '../types';
+import { loadJsonData, sorterStringCompare } from '../utils';
 import { FilterDropdownProps } from 'antd/lib/table/interface';
-import { AllGenres } from './constantData';
+import { AllGenres } from '../constantData';
 import RecommendationsComponent from './recommendations';
 
 function MovieTableComponent() {

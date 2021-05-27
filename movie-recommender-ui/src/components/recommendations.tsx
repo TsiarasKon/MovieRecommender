@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card, Carousel, Tag } from 'antd';
-import Movie from './types';
-import { chunks } from './utils';
-import './recommendations.css';
+import Movie from '../types';
+import { chunks } from '../utils';
+import '../styles/recommendations.css';
 
 const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Movie[], allMovies: Movie[] }) => {
 
@@ -63,7 +63,7 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
 
   return (
     <div className="recommended-section">
-      <h2 style={{ textAlign: "center" }}>Recommendations</h2>
+      <h2 className="text-center">Recommendations</h2>
       {/* <Carousel dotPosition="right" infinite={false}>
         {recommendedMoviesCards}
       </Carousel> */}
