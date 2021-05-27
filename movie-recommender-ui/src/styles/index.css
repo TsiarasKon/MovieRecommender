@@ -5,6 +5,11 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-image: url("../images/abstract1.jpg");
+  background-position: center;
+  background-repeat: repeat-y;
+  -webkit-background-size: cover;
+  background-size: cover;
 }
 
 code {
@@ -20,4 +25,41 @@ code {
   width: 90%;
   margin: 0 auto 0 auto;
   padding-top: 10px;
+}
+
+.header {
+  background-color: rgba(18, 18, 19, 0.95);
+  box-shadow: 0 1px 4px -1px black;
+  font-size: 125%;
+  font-weight: 600;
+  font-family: 'Ubuntu', sans-serif !important;
+}
+
+.header h1 {
+  color: goldenrod !important;
+  font-weight: 600 !important;
+}
+
+h2 {
+  color: goldenrod;
+  font-weight: 600 !important;
+}
+
+hr {
+  color: white;
+}
+
+/* TODO: move to new .css? Also, transparent background won't work */
+.movie-table, .movie-table .ant-table-tbody {
+  /*opacity: 0.8;*/
+  /*background-color: rgba(245, 245, 245, 0.75) !important;*/
+  /*background-color: transparent !important;*/
+  /*background-color: red !important;*/
+  border-radius: 5px !important;
+  /*border: 2px solid #0D204A;*/
+  /*background-color: white;*/
+}
+
+.movie-table .ant-table-thead > tr > th {
+  font-weight: 600 !important;
 }

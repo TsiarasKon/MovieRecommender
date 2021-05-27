@@ -11,16 +11,20 @@ function App() {
   const [movies, setMovies] = useState(AllMovies);
 
   return (
-    <div className="app-container">
-      <h1 className="text-center">Movie Recommender</h1>
-      <Row justify="space-between">
-        <Col span={17}>
-          <MovieTableComponent allMovies={movies} setParentMovies={(newMovies: Movie[]) => setMovies(newMovies)} />
-        </Col>
-        <Col span={6}>
-          <RecommendationsComponent ratedMovies={movies.filter(m => !!m.userRating)} allMovies={AllMovies} />
-        </Col>
-      </Row>
+    <div>
+        <div className={"header"}>
+            <h1 className="text-center">Movie Recommender</h1>
+        </div>
+        <div className="app-container">
+            <Row justify="space-between">
+            <Col span={17}>
+              <MovieTableComponent allMovies={movies} setParentMovies={(newMovies: Movie[]) => setMovies(newMovies)} />
+            </Col>
+            <Col span={6}>
+              <RecommendationsComponent ratedMovies={movies.filter(m => !!m.userRating)} allMovies={AllMovies} />
+            </Col>
+            </Row>
+        </div>
     </div>
   );
 }

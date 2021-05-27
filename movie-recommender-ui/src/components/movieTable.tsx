@@ -90,13 +90,13 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
       sorter: (a: Movie, b: Movie) => a.startYear - b.startYear
     },
     {
-      title: 'Rating',
+      title: 'IMDb Rating',
       dataIndex: 'averageRating',
       key: 'averageRating',
       sorter: (a: Movie, b: Movie) => a.averageRating - b.averageRating
     },
     {
-      title: '# votes',
+      title: 'Votes',
       dataIndex: 'numVotes',
       key: 'numVotes',
       sorter: (a: Movie, b: Movie) => a.numVotes - b.numVotes
@@ -118,7 +118,7 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
   ];
 
   return (
-    <Table dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
+    <Table className={"movie-table"} dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
   );
 }
 

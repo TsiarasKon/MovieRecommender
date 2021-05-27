@@ -60,16 +60,16 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
   );
 
   const recommendedMoviesCards = recommendedMovies.map(m =>
-    <a href={'https://www.imdb.com/title/' + m.tconst} style={{display: 'block'}} target={"_blank"}>
+    <a href={'https://www.imdb.com/title/' + m.tconst} style={{display: 'block'}} target={"_blank"} rel="noreferrer">
       <Card
-        title={<Skeleton title paragraph={false} loading={!!responsesWaitingNum} active>{m.primaryTitle}</Skeleton>}
+          title={<Skeleton title paragraph={false} loading={!!responsesWaitingNum} active><h4>{m.primaryTitle}</h4></Skeleton>}
         bordered={true} className="movie-card"
         key={m.tconst}
       >
         <Skeleton title={false} paragraph={{ rows: 2 }} loading={!!responsesWaitingNum} active>
-          Year: <strong>{m.startYear}</strong>
+          Year: &nbsp; <strong>{m.startYear}</strong>
           <br />
-        Rating: <strong>{m.averageRating}</strong> <i>({m.numVotes} votes)</i>
+        Rating: &nbsp; <strong>{m.averageRating}</strong> &nbsp; <span style={{opacity: 0.75}}>({m.numVotes} votes)</span>
           <br />
         Genres: {m.genres && (m.genres as unknown as string).split(',').map((g: string) =>
             <Tag key={g} style={{ margin: 2 }}>
@@ -83,7 +83,10 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
 
   return (
     <div className="recommended-section">
-      <h2 className="text-center">Recommendations</h2>
+      <h2 className="text-center">
+        Recommendations
+        <hr/>
+      </h2>
       {/* <Carousel dotPosition="right" infinite={false}>
         {recommendedMoviesCards}
       </Carousel> */}
