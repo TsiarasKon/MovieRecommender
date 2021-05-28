@@ -22,6 +22,7 @@ load_item_features = True        # load previously constructed features or extra
 """ HYPERPARAMETERS """
 override_rating_to_best = True
 use_median_for_year = False
+use_user_mean_rating = False     # Note: this gives slightly better results for the dataset but doesn't make as much sense for our application
 temperature = 50         # boost for categorical features to be more towards their clipping values (e.g. -1 and 1) so e.g. less good reviews are need to reach the maximum value for an actor.
 clip = True
 
@@ -245,10 +246,15 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
 
 
 def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, feature_lens: dict, item_features: np.array, temperature=temperature,
-                              override_rating_to_best=override_rating_to_best, use_median_for_year=use_median_for_year, clip=clip, verbose=False):
+                              override_rating_to_best=override_rating_to_best, use_median_for_year=use_median_for_year, clip=clip,
+                              use_user_mean_rating=use_user_mean_rating, verbose=False):
     """ Takes as input a user's ratings on IMDb titles and construct its user vector """
     # Note: higher temperature helps have higher values (e.g. closer to 1 and -1) because typically we might get very low numbers
-    avg_rating = 2.5
+    if use_user_mean_rating:
+        avg_rating = np.mean(list(user_ratings.values()))
+        # avg_rating = min(2.5, np.mean(list(user_ratings.values())))
+    else:
+        avg_rating = 2.5
     user_vector = np.zeros(item_features.shape[1], dtype=np.float64)
     missing = 0
     count = 0
@@ -261,7 +267,7 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, feature_len
             if use_median_for_year:
                 years.append(item_features[pos, 1])
             # use weights based on rating for categorical features
-            user_vector[2:] += ((rating - avg_rating) / avg_rating) * item_features[pos, 2:]
+            user_vector[2:] += ((rating - avg_rating) / max(5 - avg_rating, avg_rating)) * item_features[pos, 2:]
             count += 1
         except KeyError:
             missing += 1
