@@ -5,6 +5,7 @@ import Movie from '../types';
 import { sorterStringCompare } from '../utils';
 import { FilterDropdownProps } from 'antd/lib/table/interface';
 import { AllGenres } from '../constantData';
+import '../styles/movieTable.css';
 
 const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[], setParentMovies: (newMovies: Movie[]) => void }) => {
   const defaultPageSize = 10
@@ -64,6 +65,9 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
         record.primaryTitle
           ? record.primaryTitle.toString().toLowerCase().includes(value.toLowerCase())
           : '',
+      render: (t: string, m: Movie) =>
+        <a href={'https://www.imdb.com/title/' + m.tconst} style={{ display: 'block' }} target={"_blank"} rel="noreferrer">{t}</a>,
+      width: '25%'
     },
     {
       title: 'Genres',
@@ -82,6 +86,7 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
       })),
       onFilter: (value: any, record: Movie) =>
         record.genres.includes(value),
+      width: '20%'
     },
     {
       title: 'Year',
@@ -118,7 +123,7 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
   ];
 
   return (
-    <Table className={"movie-table"} dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
+    <Table className="movie-table" dataSource={movies} columns={columns} pagination={{ defaultPageSize: defaultPageSize }} />
   );
 }
 

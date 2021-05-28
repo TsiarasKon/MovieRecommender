@@ -48,18 +48,3 @@ h2 {
 hr {
   color: white;
 }
-
-/* TODO: move to new .css? Also, transparent background won't work */
-.movie-table, .movie-table .ant-table-tbody {
-  /*opacity: 0.8;*/
-  /*background-color: rgba(245, 245, 245, 0.75) !important;*/
-  /*background-color: transparent !important;*/
-  /*background-color: red !important;*/
-  border-radius: 5px !important;
-  /*border: 2px solid #0D204A;*/
-  /*background-color: white;*/
-}
-
-.movie-table .ant-table-thead > tr > th {
-  font-weight: 600 !important;
-}

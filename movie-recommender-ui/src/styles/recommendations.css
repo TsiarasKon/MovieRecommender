@@ -22,9 +22,9 @@
     background-color: white !important;
 }
 
-.movie-card:hover {
+/* .movie-card:hover {
     background-color: rgba(243, 195, 25, 0.60) !important;
-}
+} */
 
 .recommended-container {
     display: flex;

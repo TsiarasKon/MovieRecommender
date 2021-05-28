@@ -1,0 +1,21 @@
+.movie-table, .movie-table .ant-table-tbody {
+    border-radius: 5px !important;
+    /*border: 2px solid #0D204A;*/
+}
+
+.movie-table .ant-table-thead > tr > th {
+    font-weight: 600 !important;
+}
+
+.ant-table {
+    background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Opacity for pagination too? */
+/* ul.ant-pagination li {
+    background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+ul.ant-pagination li.ant-pagination-jump-next.ant-pagination-jump-next-custom-icon {
+    background-color: initial !important;
+} */
