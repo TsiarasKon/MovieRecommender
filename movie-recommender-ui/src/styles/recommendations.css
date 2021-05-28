@@ -4,7 +4,7 @@
 }
 
 .recommended-section {
-    background-color: rgba(245, 245, 245, 0.8);
+    background-color: rgba(255, 255, 255, 0.7);
     padding: 20px;
     height: 85vh;
     border-radius: 5px;
@@ -46,6 +46,6 @@
 
 .card-badge sup {
     color: black !important;
-    background-color: goldenrod !important;
+    background-color: rgba(255, 215, 0, 0.75) !important;
     font-weight: 700;
 }

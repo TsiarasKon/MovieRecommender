@@ -82,7 +82,7 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
             {recommendedMoviesCards}
           </div>
           :
-          !!responsesWaitingNum && <Spin size="large" style={{ margin: '45%' }} indicator={<LoadingOutlined style={{ fontSize: 48, color: "goldenrod" }} spin />} />
+          !!responsesWaitingNum && <Spin size="large" style={{ margin: '45%' }} indicator={<LoadingOutlined style={{ fontSize: 48, color: "gold" }} spin />} />
         )
       }
     </div>

@@ -91,21 +91,24 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
       dataIndex: 'startYear',
       key: 'startYear',
       sorter: (a: Movie, b: Movie) => a.startYear - b.startYear,
-      width: 100
+      width: 100,
+      align: 'center' as 'center'
     },
     {
       title: 'IMDb Rating',
       dataIndex: 'averageRating',
       key: 'averageRating',
       sorter: (a: Movie, b: Movie) => a.averageRating - b.averageRating,
-      width: 150
+      width: 150,
+      align: 'center' as 'center'
     },
     {
       title: 'Votes',
       dataIndex: 'numVotes',
       key: 'numVotes',
       sorter: (a: Movie, b: Movie) => a.numVotes - b.numVotes,
-      width: 100
+      width: 100,
+      align: 'center' as 'center'
     },
     {
       title: 'Your Rating',
@@ -120,7 +123,8 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
             setParentMovies(newMovies);
           }
         } />,
-      width: 200
+      width: 200,
+      align: 'center' as 'center'
     },
   ];
 
