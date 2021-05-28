@@ -22,6 +22,10 @@
     background-color: white !important;
 }
 
+.ant-card-head-title {
+    white-space: pre-wrap !important;
+}
+
 /* .movie-card:hover {
     background-color: rgba(243, 195, 25, 0.60) !important;
 } */
@@ -33,4 +37,15 @@
     max-height: 76vh;
     overflow-y: auto;
     margin-top: -10px;
+}
+
+.card-badge {
+    margin-top: -3px !important;
+    margin-right: 8px !important;
+}
+
+.card-badge sup {
+    color: black !important;
+    background-color: goldenrod !important;
+    font-weight: 700;
 }

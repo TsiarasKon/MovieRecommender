@@ -66,8 +66,7 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
           ? record.primaryTitle.toString().toLowerCase().includes(value.toLowerCase())
           : '',
       render: (t: string, m: Movie) =>
-        <a href={'https://www.imdb.com/title/' + m.tconst} style={{ display: 'block' }} target={"_blank"} rel="noreferrer">{t}</a>,
-      width: '25%'
+        <a href={'https://www.imdb.com/title/' + m.tconst} style={{ display: 'block' }} target={"_blank"} rel="noreferrer">{t}</a>
     },
     {
       title: 'Genres',
@@ -85,26 +84,28 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
         value: g,
       })),
       onFilter: (value: any, record: Movie) =>
-        record.genres.includes(value),
-      width: '20%'
+        record.genres.includes(value)
     },
     {
       title: 'Year',
       dataIndex: 'startYear',
       key: 'startYear',
-      sorter: (a: Movie, b: Movie) => a.startYear - b.startYear
+      sorter: (a: Movie, b: Movie) => a.startYear - b.startYear,
+      width: 100
     },
     {
       title: 'IMDb Rating',
       dataIndex: 'averageRating',
       key: 'averageRating',
-      sorter: (a: Movie, b: Movie) => a.averageRating - b.averageRating
+      sorter: (a: Movie, b: Movie) => a.averageRating - b.averageRating,
+      width: 150
     },
     {
       title: 'Votes',
       dataIndex: 'numVotes',
       key: 'numVotes',
-      sorter: (a: Movie, b: Movie) => a.numVotes - b.numVotes
+      sorter: (a: Movie, b: Movie) => a.numVotes - b.numVotes,
+      width: 100
     },
     {
       title: 'Your Rating',
@@ -118,7 +119,8 @@ const MovieTableComponent = ({ allMovies, setParentMovies }: { allMovies: Movie[
             // setMovies(newMovies);    // this is unnecessary due to the useEffect hook above
             setParentMovies(newMovies);
           }
-        } />
+        } />,
+      width: 200
     },
   ];
 

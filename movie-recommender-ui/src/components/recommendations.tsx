@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Card, Carousel, Skeleton, Spin, Tag } from 'antd';
+import { Badge, Card, Skeleton, Spin, Tag } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
 import Movie from '../types';
-import { chunks } from '../utils';
 import '../styles/recommendations.css';
 
 const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Movie[], allMovies: Movie[] }) => {
   const [recommendedMovies, setRecommendedMovies] = useState<Movie[]>([]);
   const [responsesWaitingNum, setResponsesWaitingNum] = useState(0);
+  const [serverErrorFlag, setServerErrorFlag] = useState(false);
   const timerRef = useRef<any>(null);     // timer used to prevent multiple back to back API requests
   const timerDuration = 2000;
 
@@ -29,12 +29,14 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
         .then(response => response.json())
         .then(data => {
           console.log("Got response: ", data);
+          setServerErrorFlag(false);
           const recommendedTconstArr = data.map((el: any) => el.tconst);
           setRecommendedMovies(allMovies.filter(m => recommendedTconstArr.includes(m.tconst)));
           setResponsesWaitingNum(prev => prev - 1);
         })
         .catch(error => {
           console.log("Got error: ", error);
+          setServerErrorFlag(true);
           setResponsesWaitingNum(prev => prev - 1);
         });
     }, timerDuration)
@@ -42,31 +44,13 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
 
   useEffect(() => getRecommendations(), [getRecommendations]);
 
-  const recommendedMoviesCarouselCards = ([...chunks(recommendedMovies, 4)] as Movie[][]).map(mArr =>
-    <div>
-      {mArr.map(m =>
-        <Card title={m.primaryTitle} bordered={true} key={m.tconst}>
-          Year: <strong>{m.startYear}</strong>
-          <br />
-          Rating: <strong>{m.averageRating}</strong> <i>({m.numVotes} votes)</i>
-          <br />
-          Genres: {m.genres && (m.genres as unknown as string).split(',').map((g: string) =>
-            <Tag key={g} style={{ margin: 2 }}>
-              {g}
-            </Tag>)
-          }
-        </Card>
-      )}
-    </div>
-  );
-
   const recommendedMoviesCards = recommendedMovies.map((m, i) =>
     <a href={'https://www.imdb.com/title/' + m.tconst} style={{ display: 'block' }} target={"_blank"} rel="noreferrer">
       <Card
         title={<Skeleton title paragraph={false} loading={!!responsesWaitingNum} active>
-          <h4 style={{ marginBottom: 0 }}>{i+1}. {m.primaryTitle}</h4>
-          </Skeleton>
-          }
+          <h4 style={{ marginBottom: 0 }}><Badge count={i + 1} className="card-badge" /> {m.primaryTitle}</h4>
+        </Skeleton>
+        }
         bordered={true} className="movie-card" key={m.tconst} hoverable={!responsesWaitingNum}
       >
         <Skeleton title={false} paragraph={{ rows: 2 }} loading={!!responsesWaitingNum} active>
@@ -90,15 +74,16 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
         Recommendations
         <hr />
       </h2>
-      {/* <Carousel dotPosition="right" infinite={false}>
-        {recommendedMoviesCards}
-      </Carousel> */}
-      {recommendedMoviesCards.length ?
-        <div className="recommended-container">
-          {recommendedMoviesCards}
-        </div>
+      {serverErrorFlag ?
+        <h5 className="text-center">Failed to communicate with the server. Please refresh the page.</h5>
         :
-        !!responsesWaitingNum && <Spin size="large" style={{ margin: '45%' }} indicator={<LoadingOutlined style={{ fontSize: 48, color: "goldenrod" }} spin />} />
+        (recommendedMoviesCards.length ?
+          <div className="recommended-container">
+            {recommendedMoviesCards}
+          </div>
+          :
+          !!responsesWaitingNum && <Spin size="large" style={{ margin: '45%' }} indicator={<LoadingOutlined style={{ fontSize: 48, color: "goldenrod" }} spin />} />
+        )
       }
     </div>
   );
