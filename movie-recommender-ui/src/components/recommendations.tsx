@@ -42,7 +42,7 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
     }, timerDuration)
   }, [ratedMovies, allMovies]);
 
-  useEffect(() => getRecommendations(), [getRecommendations]);
+  useEffect(() => ratedMovies.length ? getRecommendations() : setRecommendedMovies([]), [getRecommendations, ratedMovies]);
 
   const recommendedMoviesCards = recommendedMovies.map((m, i) =>
     <a href={'https://www.imdb.com/title/' + m.tconst} style={{ display: 'block' }} target={"_blank"} rel="noreferrer">
