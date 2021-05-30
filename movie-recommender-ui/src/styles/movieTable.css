@@ -1,6 +1,7 @@
 .movie-table, .movie-table .ant-table-tbody {
     border-radius: 5px !important;
     /*border: 2px solid #0D204A;*/
+    margin-bottom: -48px;      /* this is to fit the button to the left of the pagination */
 }
 
 .movie-table .ant-table-thead > tr > th {

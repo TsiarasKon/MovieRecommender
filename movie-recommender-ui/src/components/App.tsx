@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Row, Col } from 'antd';
+import { Row, Col, Button } from 'antd';
 import MovieTableComponent from './movieTable';
 import RecommendationsComponent from './recommendations';
 import Movie from '../types';
@@ -19,6 +19,7 @@ function App() {
             <Row justify="space-between">
             <Col span={17}>
               <MovieTableComponent allMovies={movies} setParentMovies={(newMovies: Movie[]) => setMovies(newMovies)} />
+              <Button onClick={() => setMovies(movies.map(x => ({ ...x, userRating: 0}) ))}>Clear All</Button>
             </Col>
             <Col span={6}>
               <RecommendationsComponent ratedMovies={movies.filter(m => !!m.userRating)} allMovies={AllMovies} />
