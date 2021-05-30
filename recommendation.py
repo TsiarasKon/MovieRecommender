@@ -15,27 +15,28 @@ max_year = 2020
 min_year = 1975
 
 
-use_wikidata = True              # use extra features from wikidata or not
-load_item_features = True        # load previously constructed features or extract them from rdf
+use_wikidata = True               # use extra features from wikidata or not
+load_item_features = False        # load previously constructed features or extract them from rdf
+tune = False
 
 
 """ HYPERPARAMETERS """
 override_rating_to_best = True
-use_median_for_year = False
+use_median_for_year = True
 use_user_mean_rating = False     # Note: this gives slightly better results for the dataset but doesn't make as much sense for our application
-temperature = 50         # boost for categorical features to be more towards their clipping values (e.g. -1 and 1) so e.g. less good reviews are need to reach the maximum value for an actor.
+temperature = 50                 # boost for categorical features to be more towards their clipping values (e.g. -1 and 1) so e.g. less good reviews are need to reach the maximum value for an actor
 clip = True
 
 # weights (higher weight -> more important), we don't want numerical features to get overshadowed by categorical ones
 # Note: if the weights change we have to rebuild the graph! So set load_item_features = False.
 w_rating = 1
-w_date = 1
+w_date = 0.25
 w_genres = 1
-w_actors = 1
-w_directors = 1
-w_series = 2
-w_subjects = 1
-w_distributors = 0.2
+w_actors = 3
+w_directors = 2
+w_series = 5
+w_subjects = 2
+w_distributors = 0.1
 
 
 def extract_binary_features(actual_values: set, ordered_possible_values: list) -> np.array:
@@ -85,9 +86,8 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
     all_directors = sorted([str(d['director']) for d in all_directors])
     print('Found', len(all_directors), 'directors with at least', LEAST_MOVIES2, 'movies directed.')
 
-    # TODO: Add writers/producers?
-
     if use_wikidata:
+        LEAST_MOVIES_SERIES = 2
         LEAST_MOVIES3 = 3
 
         print('Looking up series...')
@@ -97,10 +97,10 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
                     ?movie pred:hasSeries ?series . 
                 }
                 GROUP BY ?series
-                HAVING (COUNT(?movie) >= """ + str(LEAST_MOVIES3) + ')',
+                HAVING (COUNT(?movie) >= """ + str(LEAST_MOVIES_SERIES) + ')',
             initNs={'pred': ns_predicates})
         all_series = sorted([str(s['series']) for s in all_series])
-        print('Found', len(all_series), 'series with at least', LEAST_MOVIES3, 'movies.')
+        print('Found', len(all_series), 'series with at least', LEAST_MOVIES_SERIES, 'movies.')
 
         print('Looking up subjects...')
         all_subjects = rdf.query(
@@ -330,7 +330,7 @@ def calculate_similarity(user_features: np.array, item_features: np.array, top_K
 
 
 def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rating_threshold=3.5, top_K=25,
-             limit=100000, use_only_known_ratings=True, print_stats=True):
+             limit=500000, use_only_known_ratings=True, print_stats=True, temp=temperature):
     """ Depending on use_only_known_ratings we consider all items or only the items the user has rated and hence knows about.
         Limit has to be set to fit all tables in memory.
     """
@@ -349,7 +349,7 @@ def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rat
     relevant_movies_per_user = []
     for i in tqdm(range(num_users), total=num_users, desc='Creating user features'):
         user_rating = create_user_rating_dict(user_ratings[user_ratings['userId'] == i + 1])
-        user_features[i, :] = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features)
+        user_features[i, :] = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features, temperature=temp)
         user_ratings_dicts.append(user_rating)
         relevant_movies_per_user.append({m for m, r in user_rating.items() if r >= rating_threshold})
     # print(user_features)
@@ -427,34 +427,86 @@ def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_
     return recommendations
 
 
-if __name__ == '__main__':
-    if not load_item_features:
-        # load rdf
-        print('Loading rdf...')
-        rdf = load_rdf()
-        print('done')
+def tune_hyperparameters():
+    global w_rating, w_date, w_genres, w_actors, w_directors, w_series, w_subjects, w_distributors, temperature
+
+    # load rdf
+    print('Loading rdf...')
+    rdf = load_rdf()
+    print('done')
+
+    confs = [
+        # {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": 1},
+        # {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": .2},
+        # {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": .1},
+
+        # {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": .1},
+        # {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 2, "w_subjects": 1, "w_distributors": .1},
+        # {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 3, "w_subjects": 1, "w_distributors": .1},
+        # {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 5, "w_subjects": 1, "w_distributors": .1},
+
+        # {"w_rating": 0.5, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": .1},
+        # {"w_rating": 1, "w_date": 0.5, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": .1},
+        # {"w_rating": 1, "w_date": 0.25, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": .1},
+        # {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": .1},
+
+        # {"w_rating": 1, "w_date": 0.25, "w_genres": 1, "w_actors": 2, "w_directors": 2, "w_series": 1, "w_subjects": 1, "w_distributors": 0.1},
+        # {"w_rating": 1, "w_date": 0.25, "w_genres": 1, "w_actors": 3, "w_directors": 2, "w_series": 1.5, "w_subjects": 1, "w_distributors": 0.1},
+        # {"w_rating": 1, "w_date": 0.25, "w_genres": 1, "w_actors": 3, "w_directors": 2, "w_series": 1, "w_subjects": 1, "w_distributors": 0.1},
+
+        {"w_rating": 1, "w_date": 1, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": 1},
+        {"w_rating": 1, "w_date": 0.25, "w_genres": 1, "w_actors": 1, "w_directors": 1, "w_series": 1, "w_subjects": 1, "w_distributors": 0.1},
+        {"w_rating": 1, "w_date": 0.25, "w_genres": 1, "w_actors": 3, "w_directors": 2, "w_series": 1, "w_subjects": 1, "w_distributors": 0.1},
+        {"w_rating": 1, "w_date": 0.25, "w_genres": 1, "w_actors": 3, "w_directors": 2, "w_series": 1, "w_subjects": 2, "w_distributors": 0.1},
+        {"w_rating": 1, "w_date": 0.25, "w_genres": 1, "w_actors": 3, "w_directors": 2, "w_series": 1.5, "w_subjects": 2, "w_distributors": 0.1},
+        {"w_rating": 0.5, "w_date": 0.25, "w_genres": 1.5, "w_actors": 3, "w_directors": 2, "w_series": 1.5, "w_subjects": 2, "w_distributors": 0.1},
+    ]
+
+    for conf in confs:
+        w_rating, w_date, w_genres, w_actors, w_directors, w_series, w_subjects, w_distributors = conf.values()
 
         # extract item features
-        movie_pos, item_features, feature_lens = build_items_feature_vetors(rdf)
-        print(item_features)
+        movie_pos, item_features, feature_lens = build_items_feature_vetors(rdf, save=False)
+        print(f'Built {item_features.shape[0]} movies with {item_features.shape[1]} features each.')
+
+        # evaluate for this conf for a bunch of temperatures
+        for temperature in [50]:  # [1, 10, 25, 50, 100]:
+            print(f'> Temperature: {temperature} Conf:', w_rating, w_date, w_genres, w_actors, w_directors, w_series, w_subjects, w_distributors)
+            evaluate(item_features, movie_pos, feature_lens, temp=temperature)
+            print('')
+
+
+if __name__ == '__main__':
+    if tune:
+        tune_hyperparameters()
     else:
-        # load saved features
-        print('Loading previously saved features')
-        item_features = np.load(f'item_features{"_wikidata" if use_wikidata else ""}.npy')
-        movie_pos: bidict = load_dict(f'movie_pos{"_wikidata" if use_wikidata else ""}')
-        feature_lens: dict = load_dict(f'feature_lens{"_wikidata" if use_wikidata else ""}')
+        if not load_item_features:
+            # load rdf
+            print('Loading rdf...')
+            rdf = load_rdf()
+            print('done')
 
-        print(item_features)
+            # extract item features
+            movie_pos, item_features, feature_lens = build_items_feature_vetors(rdf)
+            print(f'Built {item_features.shape[0]} movies with {item_features.shape[1]} features each.')
+        else:
+            # load saved features
+            print('Loading previously saved features...')
+            item_features = np.load(f'item_features{"_wikidata" if use_wikidata else ""}.npy')
+            movie_pos: bidict = load_dict(f'movie_pos{"_wikidata" if use_wikidata else ""}')
+            feature_lens: dict = load_dict(f'feature_lens{"_wikidata" if use_wikidata else ""}')
 
-    # Manually test a user rating input (STAR WARS)
-    user_rating = {
-        'tt0076759': 5.0,
-        'tt0080684': 4.5,
-        'tt0120915': 3.5,
-        'tt0121765': 4.5,
-        'tt0121766': 4.5
-    }
+            print(f'Loaded {item_features.shape[0]} movies with {item_features.shape[1]} features each.')
 
-    recommend_for_single_user(user_rating, item_features, movie_pos, feature_lens)
+        # Manually test a user rating input (STAR WARS)
+        user_rating = {
+            'tt0076759': 5.0,
+            'tt0080684': 4.5,
+            'tt0120915': 3.5,
+            'tt0121765': 4.5,
+            'tt0121766': 4.5
+        }
 
-    evaluate(item_features, movie_pos, feature_lens)
+        recommend_for_single_user(user_rating, item_features, movie_pos, feature_lens)
+
+        evaluate(item_features, movie_pos, feature_lens)
