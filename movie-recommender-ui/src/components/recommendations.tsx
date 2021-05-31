@@ -30,8 +30,8 @@ const RecommendationsComponent = ({ ratedMovies, allMovies }: { ratedMovies: Mov
         .then(data => {
           console.log("Got response: ", data);
           setServerErrorFlag(false);
-          const recommendedTconstArr = data.map((el: any) => el.tconst);
-          setRecommendedMovies(allMovies.filter(m => recommendedTconstArr.includes(m.tconst)));
+          const recommendedTconstArr: string[] = data.map((el: any) => el.tconst);
+          setRecommendedMovies(recommendedTconstArr.map(t => allMovies.find(m => m.tconst === t)) as Movie[]);
           setResponsesWaitingNum(prev => prev - 1);
         })
         .catch(error => {
