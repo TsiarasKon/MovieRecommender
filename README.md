@@ -34,7 +34,9 @@ Then, each time we get called to make recommendations for a user given ratings o
 
     ![User vector creation for categorical features](UserVector.png "User vector creation for categorical features")
    
-   Here, *temperature* is another hyperparameter of the process. Higher *temperature* results in more "extreme" estimations in that less ratings are needed to reach the maximum/minimum value for a feature value (e.g. the less % of comedies one would need to watch for their estimated preferences for comedies to be close to 1 times the weight of the genre feature). <br> Also, note that the weights of each feature are already incorporated in the item feature matrix and that we clip the results of this formula in the range of [-w, w] for each categorical feature with weight w.<br>
+   Here, *temperature* is another hyperparameter of the process. Higher *temperature* results in more "extreme" estimations in that less ratings are needed to reach the maximum/minimum value for a feature value (e.g. the less % of comedies one would need to watch for their estimated preferences for comedies to be close to 1 times the weight of the genre feature). 
+   
+   Also, note that the weights of each feature are already incorporated in the item feature matrix and that we clip the results of this formula in the range of [-w, w] for each categorical feature with weight w.<br>
 
 3. We modify the item feature matrix (a copy of it) to have an encoding of -1/1 instead of 0/1 for the categorical features. This makes more sense for our impending cosine similarity calculation between user and item vectors since now the item vector's values will conveniently be in the exact same range of [-w, w] for each feature with weight w as the user vector's values.<br>
 
