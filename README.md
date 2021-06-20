@@ -71,7 +71,7 @@ A more detailed explaination may be found here: http://sdsawtelle.github.io/blog
 
 In order to evaluate our recommender system using said metrics we used the **movieLens dataset** (https://grouplens.org/datasets/movielens/), which contains 25.000.000 ratings of 162.000 users in 62.000 movies. For practical reason, only a fraction of these were used in our experiments.
 
-We evaluated both metrics for some reasonable values of n (e.g. 15, 25, 50, etc) and for a bunch of different hyperparameter configurations in order to **tune our hyperparameters**. These primarily include the weights of each feature and the *temperature* hyperparameter, but also some other minor boolean flags for optional adjustments. Below are some experiments we wrote down.
+We evaluated both metrics for some reasonable values of n (e.g. 15, 25, 50, etc) and for a bunch of different hyperparameter configurations in order to **tune our hyperparameters**. These primarily include the weights of each feature and the *temperature* hyperparameter, but also some other minor boolean flags for optional adjustments. Below are some experiments we wrote down for a cut-off of 25 and a threshold of 3.5.
 
 | temperature (best of 1, 10, 25, 50 & 100) | w_rating | w_year | w_genres | w_actors | w_ directors | w_series | w_ subjects | w_distributors | RECALL @25 | MAP@25 |
 |-------------------------------------------|----------|--------|----------|----------|--------------|----------|-------------|----------------|------------|--------|
