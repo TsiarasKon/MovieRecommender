@@ -16,7 +16,7 @@ min_year = 1975
 
 
 use_wikidata = True               # use extra features from wikidata or not
-load_item_features = False        # load previously constructed features or extract them from rdf
+load_item_features = True         # load previously constructed features or extract them from rdf
 tune = False
 
 
@@ -281,24 +281,26 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, feature_len
     # use median for year in order to avoid situations where the mean is nowhere near the most movies the user watches
     if use_median_for_year:
         user_vector[1] = np.median(years)
+    # calculated maximum value of each feature based on weight
+    # TODO: Hardcoded 2, if more numerical features this needs to change
+    # TODO: this can be calculated outside of this since it is the same for each user
+    max_clip = np.ones(item_features.shape[1] - 2)
+    weights = [w_genres, w_actors, w_directors]
+    lens = [feature_lens['genres'], feature_lens['actors'], feature_lens['directors']]
+    if use_wikidata:
+        weights += [w_series, w_subjects, w_distributors]
+        lens += [feature_lens['series'], feature_lens['subjects'], feature_lens['dists']]
+    last = 0
+    for i in range(len(weights)):
+        max_clip[last: last + lens[i]] *= weights[i]
+        last += lens[i]
     # clip vector to maximum 1 and minimum -1 to optimize cosine similarity
     if clip:
-        # clip separately each feature based on weight
-        max_clip = np.ones(item_features.shape[1] - 2)
-        weights = [w_genres, w_actors, w_directors]
-        lens = [feature_lens['genres'], feature_lens['actors'], feature_lens['directors']]
-        if use_wikidata:
-            weights += [w_series, w_subjects, w_distributors]
-            lens += [feature_lens['series'], feature_lens['subjects'], feature_lens['dists']]
-        last = 0
-        for i in range(len(weights)):
-            max_clip[last: last + lens[i]] *= weights[i]
-            last += lens[i]
         min_clip = -max_clip  # symmetric
         user_vector[2:] = np.clip(user_vector[2:], min_clip, max_clip)
     if verbose and missing > 0:
         print(f'Warning: {missing} movies out of {len(user_ratings)} were missing.')
-    return user_vector
+    return user_vector, max_clip
 
 
 def calculate_similarity(user_features: np.array, item_features: np.array, top_K=None, threshold=None):
@@ -329,6 +331,11 @@ def calculate_similarity(user_features: np.array, item_features: np.array, top_K
     return cos_sim, ordered_pos
 
 
+def modify_item_features(item_features: np.array, max_clip):
+    new_item_features = np.copy(item_features)
+    new_item_features[:, 2:] = 2 * new_item_features[:, 2:] - max_clip      # TODO: Hardcoded 2, if more numerical features this needs to change
+    return new_item_features
+
 def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rating_threshold=3.5, top_K=25,
              limit=500000, use_only_known_ratings=True, print_stats=True, temp=temperature):
     """ Depending on use_only_known_ratings we consider all items or only the items the user has rated and hence knows about.
@@ -347,11 +354,13 @@ def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rat
     user_features = np.zeros((num_users, item_features.shape[1]))
     user_ratings_dicts = []
     relevant_movies_per_user = []
+    max_clip = None
     for i in tqdm(range(num_users), total=num_users, desc='Creating user features'):
         user_rating = create_user_rating_dict(user_ratings[user_ratings['userId'] == i + 1])
-        user_features[i, :] = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features, temperature=temp)
+        user_features[i, :], max_clip = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features, temperature=temp)    # Note: max_clip is always the same, we just need one
         user_ratings_dicts.append(user_rating)
         relevant_movies_per_user.append({m for m, r in user_rating.items() if r >= rating_threshold})
+    assert(max_clip is not None)
     # print(user_features)
 
     if print_stats:
@@ -361,7 +370,7 @@ def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rat
         print('Average non_zero features in user_features are:', f'{mean:.2f}', 'out of', item_features.shape[1], f'({100 * mean / item_features.shape[1]:.2f}%)')
 
     print('Calculating similarity...')
-    item_features = 2 * item_features - 1
+    item_features = modify_item_features(item_features, max_clip)
     cos_sim, ordered_pos = calculate_similarity(user_features, item_features, top_K=top_K if not use_only_known_ratings else None)
     # print(cos_sim)
 
@@ -404,11 +413,11 @@ def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rat
 
 def recommend_for_single_user(user_rating: dict, item_features: np.array, movie_pos: bidict, feature_lens: dict, ignore_seen=False, topK=20, verbose=True):
     # build user feature vector
-    user_features = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features, verbose=True)
+    user_features, max_clip = build_user_feature_vector(user_rating, movie_pos, feature_lens, item_features, verbose=True)
     print('user_features =', user_features)
 
     # make recommendations
-    item_features = 2 * item_features - 1
+    item_features = modify_item_features(item_features, max_clip)
     cos_sim, items_pos = calculate_similarity(user_features, item_features, top_K=None if ignore_seen else topK)
     print('min:', min(cos_sim), 'max:', max(cos_sim))
     k = 1
