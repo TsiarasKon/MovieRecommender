@@ -88,9 +88,30 @@ For instance, we found that the distributors feature was not as important (based
 
 ### Application
 
-TODO: Describe application
+In order to experimentally verify our implementation in an easy and user-friendly manner, we implemented a simple User Interface. There, a user can insert ratings for however many movies they desire and they will then be presented with a list of movie recommendations suited to their ratings, based on the evaluation criteria described above.
 
-TODO: Show sample screenshots from our application
+#### Technologies used
+* Front-End: **React.js**
+* Back-End: **Flask** (Python framework)
+* The communication betweeen the two is established via a simple **REST API**.
+
+#### Usage examples
+
+* Star Wars movie series:
+![Screenshot (223)](https://user-images.githubusercontent.com/24826135/123450744-b670b980-d5e5-11eb-8675-6b4baa4cd2c3.png)
+![Screenshot (224)](https://user-images.githubusercontent.com/24826135/123450755-b83a7d00-d5e5-11eb-8435-e77791c2ca19.png)
+In this example a user has highly rated all 3 Star Wars prequel movies and 2 of the original 3 ones. Our top recommendation expectedly is the remaining oringal movie ("Star Wars: Episode V - The Empire Strikes Back") and the following 3 recommendations are the 3 sequel Star Wars movies.
+Following these, there's a (lower rated) animated Star Wars movie and the rest of the recommendations are movies that feature multiple actors from the movies that we've rated (e.g. "Jumper" features both Samuel L. Jackson and Hayden Christensen who also act in the Star Wars prequel trilogy).
+
+* Marvel Cinematic Universe (MCU) movie series:
+![Screenshot (221)](https://user-images.githubusercontent.com/24826135/123450704-ace75180-d5e5-11eb-9d80-3a6a50091915.png)
+![Screenshot (222)](https://user-images.githubusercontent.com/24826135/123450712-af49ab80-d5e5-11eb-9a7c-4f2d4ccd8fd5.png)
+Let's assume that our next user only rates the 3 latest "Captain America" movies, all part of the Marvel Cinematic Universe movie series. 
+Though only some of them are shown in the screenshots above, all our top recommendations for this user are exclusively movies that are part of the MCU! The top ones are "Avengers" movies which do feature actors also participating in the "Captain America" movies, however some of the others are seemingly unrelated (like "Captain Marvel"). The recommendation of these would not be possible merely by their common genres (as there are hundreds if not thousands of movies sharing those exact same genres) but was achieved by increasing the weight of the "series" feature that we obtained from Wikidata.
+
+* Robert De Niro movies:
+![Screenshot (225)](https://user-images.githubusercontent.com/24826135/123442973-1e230680-d5de-11eb-9f00-88ff8dcd02f2.png)
+In this last example, our user has simply provided a high rating for 3 movies starring Robert De Niro. Here, in the absence of a common "series" among the rated moveis or any such feature, our recommender captures that the common characteristic between them is that actor and, consequently, proceeds to recommend movies that also feature Robert De Niro.
 
 
 ### Future work
