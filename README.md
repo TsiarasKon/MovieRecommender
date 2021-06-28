@@ -86,9 +86,9 @@ We evaluated both metrics for some reasonable values of n (e.g. 15, 25, 50, etc)
 For instance, we found that the distributors feature was not as important (based on this dataset at least) as lowering its weight improved our metrics significantly. That being said, if we are not planning on using this system for the same kind of users then it is reasonable to change these weights based on our expectations as well. For example, we believe that the series feature should have a big say (perhaps the biggest) on our recommendations as it is our belief that users who rated highly one or more movies that are part of a series (e.g. Star Wars) would probably also want to watch (and therefore would rate highly) other movies in the same series.  
 
 
-### Application
+### A simple end-to-end application
 
-In order to experimentally verify our implementation in an easy and user-friendly manner, we implemented a simple User Interface. There, a user can insert ratings for however many movies they desire and they will then be presented with a list of movie recommendations suited to their ratings, based on the evaluation criteria described above.
+In order to experimentally and intuitively verify and test our implementation in an easy and user-friendly manner, we implemented a simple User Interface where a user can insert ratings for however many movies they desire and they will then be presented with a list of movie recommendations from our recommender system.
 
 #### Technologies used
 * Front-End: **React.js**
