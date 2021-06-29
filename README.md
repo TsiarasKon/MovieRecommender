@@ -45,11 +45,31 @@ Then, each time we get called to make recommendations for a user given ratings o
 
 ### Movie features used
 
-TODO: From **IMDb dataset** these...
+#### IMDb dataset
 
-TODO: From wikidata enrichment these...
+Since the IMDb dataset provides an abundance of features, many of which were not in any obvious way useful to our task, we opted to keep only a subset of them.
 
-TODO: 2nd enrichment???
+For every movie, the features we decided to use were the following:
+* IMDb rating (with number of votes)
+* Release Year
+* Genres
+* Actors
+* Directors
+
+#### Wikidata data augmentation
+
+Our first approach to data augmentation was to turn to Wikidata, which contains a plethora of information for most movies. Locating that information and merging it with what we already had was easily achievable thanks to the inclusion of the IMDb ID field in every Wikidata movie entry. 
+Many of the features that Wikidata provides for every movie expectedly overlapped with our existing features from the IMDb dataset, however the following were deemed useful to augment our dataset:
+* Movie series
+* Main subject
+* Distributors
+
+These features were obtained by querying the Wikidata API with an appropriate SPARQL query, the results of which were then added to our existing RDF graph.
+
+It should be noted that there while the majority of movies in our IMDB dataset was also found in Wikidata, not all of the above features existed for most of them. Still, we kept as many as we could retrieve given that any additional information we could gather, even for a subset of our movies, can only postively affect our recommender.
+Lastly, it's worth mentioning that Wikidata also included some invalid data (null values in some of our features of interest), which we of course immediately discarded upon receiving the query results.
+
+TODO: 2nd data augmentation (reviews + NLP)
 
 
 ### Performance Evaluation
