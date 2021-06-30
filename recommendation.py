@@ -20,7 +20,7 @@ tune = False                      # test different configurations of hyperparame
 
 # data augmentations
 use_wikidata = True               # use extra features from wikidata or not ->  recommended
-use_nlp_emotions = True           # use extra features from NLP enrichment  ->  not recommended
+use_nlp_emotions = False          # use extra features from NLP enrichment  ->  not recommended
 
 
 """ HYPERPARAMETERS """
@@ -217,11 +217,16 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
             subjects = set(movie_data['subjects'].split(','))
             dists = set(movie_data['dists'].split(','))
         if use_nlp_emotions:
-            # TODO: get these from the RDF Graph
-            emotions = set()
+            res = rdf.query(
+                """SELECT ?emotion
+                   WHERE { 
+                      movies:%s pred:producesEmotion ?emotion
+                   }""" % movie_data['movie'].split('/')[-1],
+                initNs={'movies': ns_movies, 'pred': ns_predicates})
+            emotions = set([e for e in res])
 
         with warnings.catch_warnings():
-            # hide user warnings about ignoredmissing values, ignoring these values is the desired behaviour
+            # hide user warnings about ignored missing values, ignoring these values is the desired behaviour
             warnings.simplefilter("ignore")
             genres_feat = extract_binary_features(genres, all_genres)
             actors_feat = extract_binary_features(actors, all_actors)
@@ -353,6 +358,7 @@ def modify_item_features(item_features: np.array, max_clip):
     new_item_features = np.copy(item_features)
     new_item_features[:, 2:] = 2 * new_item_features[:, 2:] - max_clip      # TODO: Hardcoded 2, if more numerical features this needs to change
     return new_item_features
+
 
 def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rating_threshold=3.5, top_K=25,
              limit=100000, use_only_known_ratings=True, print_stats=True, temp=temperature):

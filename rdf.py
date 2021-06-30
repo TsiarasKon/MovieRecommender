@@ -10,7 +10,7 @@ from rdflib import Graph, Literal, URIRef, Namespace, XSD
 from wikidata_service import get_all_from_wikidata
 
 
-MIN_VOTES = 500
+MIN_VOTES = 1000
 imdb_data_folder = 'imdb_data/'
 name_basics_file = 'name.basics.tsv'
 tconst_files = [
@@ -22,7 +22,7 @@ tconst_files = [
 ]
 movielens_data_folder = 'movielens_data/'
 emotions = ["Happy", "Angry", "Surprise", "Sad", "Fear"]
-use_reviews = True
+use_reviews = False
 
 pd.set_option('display.max_columns', None)
 
@@ -61,7 +61,7 @@ def data_loading():
     movies_df['genres'] = movies_df['genres'].fillna('').astype(np.str)
 
     # filtering
-    movies_df = movies_df[(movies_df['numVotes'] >= 500) &
+    movies_df = movies_df[(movies_df['numVotes'] >= MIN_VOTES) &
                           (~(movies_df['genres'].str.contains('Short', regex=False, na=False))) &
                           (movies_df['genres'].str != '')]
 
@@ -193,7 +193,7 @@ def build_and_save_rdf(save=True, limit=None, prune=True):
         if use_reviews:
             produces_emotion = URIRef(ns_predicates + 'producesEmotion')
             for e in emotions:
-                if imdb_id in reviews_df.index and reviews_df.iloc[imdb_id][e]:
+                if imdb_id in reviews_df.index and reviews_df.loc[imdb_id][e]:
                     emotion = URIRef(ns_emotions + e)
                     g.add((movie, produces_emotion, emotion))
 
