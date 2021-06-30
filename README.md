@@ -114,7 +114,7 @@ In order to experimentally and intuitively verify and test our implementation in
 #### Technologies used
 * Front-End: **React.js**
 * Back-End: **Flask** (Python framework)
-* The communication betweeen the two is established via a a single REST endpoint using the JSON format.
+* The communication betweeen the two is established via a single REST endpoint using the JSON format.
 
 #### Usage examples
 
