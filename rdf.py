@@ -21,6 +21,8 @@ tconst_files = [
     ('title.ratings.tsv', None)
 ]
 movielens_data_folder = 'movielens_data/'
+emotions = ["Happy", "Angry", "Surprise", "Sad", "Fear"]
+use_reviews = True
 
 pd.set_option('display.max_columns', None)
 
@@ -31,6 +33,7 @@ ns_genres = Namespace('https://www.imdb.com/search/title/?genres=')
 ns_principals = Namespace('https://www.imdb.com/name/')
 ns_predicates = Namespace('http://example.org/props/')
 ns_wiki = Namespace('http://www.wikidata.org/entity/')
+ns_emotions = Namespace('http://example.org/emotions/')
 
 
 def data_loading():
@@ -79,7 +82,7 @@ def data_loading():
     return movies_df, principals_df
 
 
-def review_data_loading():
+def reviews_data_loading():
     num_reviews = 20
     reviews_path = os.path.join("imdb_reviews", "aclImdb", "train")
     reviews_files = glob.glob(os.path.join(reviews_path, "unsup", "*.txt"))[:num_reviews]
@@ -87,13 +90,12 @@ def review_data_loading():
     for r_f in reviews_files:
         with open(r_f, "r", encoding="utf8") as f:
             reviews_texts.append(f.readlines()[0])
-
     reviews_emotions = [te.get_emotion(t) for t in tqdm(reviews_texts)]
     reviews_tconst = []
     with open(os.path.join(reviews_path, "urls_unsup.txt"), "r") as f:
         for line in f:
             reviews_tconst.append(line.split('/')[4])
-    print([reviews_tconst[int(f.split(os.path.sep)[-1].split('_')[0])] for f in reviews_files])
+
     reviews_df = pd.DataFrame({
         "tconst": [reviews_tconst[int(f.split(os.path.sep)[-1].split('_')[0])] for f in reviews_files],
         # "text": reviews_texts,
@@ -103,8 +105,12 @@ def review_data_loading():
         "Sad": [e["Sad"] for e in reviews_emotions],
         "Fear": [e["Fear"] for e in reviews_emotions],
     }).set_index("tconst")
-    print(reviews_df)
-    print(reviews_df.groupby(["tconst"]).mean())
+    emotion_thresholds = { e: reviews_df[e].mean() for e in emotions }
+    reviews_df = reviews_df.groupby(["tconst"]).mean()      # get average emotion of all reviews per movie
+    for e in emotions:      # convert columns to booleans
+        reviews_df[e] = reviews_df[reviews_df[e] >= emotion_thresholds[e]].astype(bool)
+    reviews_df.fillna(False, inplace=True)
+    return reviews_df
 
 
 def build_and_save_rdf(save=True, limit=None, prune=True):
@@ -115,6 +121,9 @@ def build_and_save_rdf(save=True, limit=None, prune=True):
     # Get extra data from wikidata
     wikidata_df = get_all_from_wikidata(movies_df.index.tolist())
     print(wikidata_df)
+
+    if use_reviews:
+        reviews_df = reviews_data_loading()
 
     for imdb_id, data in tqdm(movies_df.iterrows(), total=movies_df.shape[0] if limit is None else min(movies_df.shape[0], limit), desc='Building rdf graph'):
         movie = URIRef(ns_movies + imdb_id)
@@ -180,6 +189,13 @@ def build_and_save_rdf(save=True, limit=None, prune=True):
             subjects = wikidata_df.loc[imdb_id]['subject'].split('; ')
             for s in subjects:
                 if len(s) > 0 and s.startswith('http'): g.add((movie, has_subject, URIRef(s)))
+
+        if use_reviews:
+            produces_emotion = URIRef(ns_predicates + 'producesEmotion')
+            for e in emotions:
+                if imdb_id in reviews_df.index and reviews_df.iloc[imdb_id][e]:
+                    emotion = URIRef(ns_emotions + e)
+                    g.add((movie, produces_emotion, emotion))
 
     # Prune graph of unused stuff
     if prune:
@@ -258,7 +274,7 @@ if __name__ == '__main__':
     # Test Query
     qres = g.query(
         """SELECT DISTINCT ?x ?year ?director ?genre
-           WHERE {              
+           WHERE {
               ?x pred:hasGenre ?genre ;
                  pred:hasYear ?year ;
                  pred:hasDirector ?director ;
