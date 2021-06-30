@@ -2,7 +2,7 @@
 
 ### Summary
 
-In this project we build a **content-based recommender system** for movies. In content-based recommendation [1], it is paramount to find appropriate features for the items at hand (i.e. the movies), based on which we can calculate a reliable similarity metric between them. This is where knowledge bases and knowledge extraction comes in. We build an RDF graph containing all the data from the official IMDb dataset that we deemed most useful and, then, we enrich it with relevant info from other online RDF knowledge bases such as wikidata [2]. Having done that, we are able to use SPARQL in order to query from said knowledge graph all the features we need for our task.
+In this project we build a **content-based recommender system** for movies. In content-based recommendation [1], it is paramount to find appropriate features for the items at hand (i.e. the movies), based on which we can calculate a reliable similarity metric between them. This is where knowledge bases and knowledge extraction comes in. We build an RDF graph containing all the data from the official IMDb dataset that we deemed most useful and, then, we enrich it with relevant info from other online RDF knowledge bases such as wikidata  [2]. Having done that, we are able to use SPARQL in order to query from said knowledge graph all the features we need for our task.
 
 ### Content-Based Recommendation
 
@@ -147,9 +147,9 @@ Potential future work includes:
 
 [2] Wikidata: https://www.wikidata.org/
 
-[2] IMDb dataset: https://datasets.imdbws.com/
+[3] IMDb dataset: https://datasets.imdbws.com/
 
-[3] Evaluation Metrics: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html 
+[4] Evaluation Metrics: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html 
 
-[4] MovieLens dataset: https://grouplens.org/datasets/movielens/
+[5] MovieLens dataset: https://grouplens.org/datasets/movielens/
 
