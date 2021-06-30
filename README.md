@@ -60,7 +60,7 @@ The first two are numerical while the latter three are categorical features with
 
 #### Wikidata data augmentation
 
-Our first approach to data augmentation was to turn to Wikidata, which contains a plethora of information for most movies. Locating that information and merging it with what we already had was easily achievable thanks to the inclusion of the IMDb ID field in every Wikidata movie entry. 
+Our first approach to data augmentation was to turn to Wikidata [2], which contains a plethora of information for most movies. Locating that information and merging it with what we already had was easily achievable thanks to the inclusion of the IMDb ID field in every Wikidata movie entry. 
 Many of the features that Wikidata provides for every movie expectedly overlapped with our existing features from the IMDb dataset, however the following were deemed useful to augment our dataset with:
 * Movie series
 * Main subject
