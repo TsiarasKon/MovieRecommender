@@ -6,6 +6,7 @@ from rdflib import Graph, Literal, URIRef, Namespace, XSD
 from wikidata_service import get_all_from_wikidata
 
 
+MIN_VOTES = 500
 imdb_data_folder = 'imdb_data/'
 name_basics_file = 'name.basics.tsv'
 tconst_files = [
@@ -53,7 +54,7 @@ def data_loading():
     movies_df['genres'] = movies_df['genres'].fillna('').astype(np.str)
 
     # filtering
-    movies_df = movies_df[(movies_df['numVotes'] >= 500) &
+    movies_df = movies_df[(movies_df['numVotes'] >= MIN_VOTES) &
                           (~(movies_df['genres'].str.contains('Short', regex=False, na=False))) &
                           (movies_df['genres'].str != '')]
 
@@ -129,8 +130,9 @@ def build_and_save_rdf(save=True, limit=None, prune=True):
                 g.add((movie, pred, URIRef(ns_principals + artist)))
 
         # TODO: are info for artists useful for our task? Should we add such triples?
+        # Note: we already have too much data to handle...
 
-        # create rdf graph from wikidata  TODO: use codes instead of names?
+        # create rdf graph from wikidata
         if imdb_id in wikidata_df.index:
             has_series = URIRef(ns_predicates + 'hasSeries')
             series = wikidata_df.loc[imdb_id]['series'].split('; ')
@@ -205,8 +207,8 @@ def load_rdf():
 
 
 if __name__ == '__main__':
-    only_load = True    # load or build from scratch?
-    prune_loaded = False
+    only_load = False    # load or build from scratch?
+    prune_loaded = True
 
     if only_load:
         print('Loading rdf...')
@@ -215,20 +217,24 @@ if __name__ == '__main__':
 
         if prune_loaded:
             prune_rdf_graph(g)
-            print('Saving graph...')
-            g.serialize(destination='movies.nt', format='nt')
+
+        print('Saving graph...')
+        g.serialize(destination='movies.nt', format='nt')
     else:
         g = build_and_save_rdf()
 
     # Test Query
     qres = g.query(
         """SELECT DISTINCT ?x ?year ?director ?genre
-           WHERE {              ?x pred:hasGenre ?genre .
-              ?x pred:hasYear ?year .
-              ?x pred:hasDirector ?director .
-              ?x pred:hasActor principals:nm0000120 .
+           WHERE {              
+              ?x pred:hasGenre ?genre ;
+                 pred:hasYear ?year ;
+                 pred:hasDirector ?director ;
+                 pred:hasActor principals:nm0000120 .
               FILTER(?year >= 2010)
            }""", initNs={'movies': ns_movies,
                          'genres': ns_genres,
                          'pred': ns_predicates,
                          'principals': ns_principals})
+    res = [row for row in qres]
+    print(res)

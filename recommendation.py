@@ -14,10 +14,13 @@ movielens_data_folder = 'movielens_data/'
 max_year = 2020
 min_year = 1975
 
+load_item_features = False        # load previously constructed features or extract them from saved rdf graph
+tune = False                      # test different configurations of hyperparameters and keep the best one
 
-use_wikidata = True               # use extra features from wikidata or not
-load_item_features = True         # load previously constructed features or extract them from rdf
-tune = False
+
+# data augmentations
+use_wikidata = True               # use extra features from wikidata or not ->  recommended
+use_nlp_emotions = True           # use extra features from NLP enrichment  ->  not recommended
 
 
 """ HYPERPARAMETERS """
@@ -37,6 +40,7 @@ w_directors = 2
 w_series = 5
 w_subjects = 2
 w_distributors = 0.1
+w_emotions = 0.5
 
 
 def extract_binary_features(actual_values: set, ordered_possible_values: list) -> np.array:
@@ -187,8 +191,11 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
         feature_lens['series'] = len(all_series)
         feature_lens['subjects'] = len(all_subjects)
         feature_lens['dists'] = len(all_dists)
-    movie_pos: bidict = bidict({})
+    if use_nlp_emotions:
+        NUM_FEATURES += 5                      # TODO: hardcoded 5
+        feature_lens['emotions'] = 5
 
+    movie_pos: bidict = bidict({})
     print(f'Allocating memory for {len(movies)} x {NUM_FEATURES} array...')
     item_features = np.zeros((len(movies), NUM_FEATURES), dtype=np.float32)   # takes too long :(
 
@@ -209,6 +216,9 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
             series = set(movie_data['series'].split(','))
             subjects = set(movie_data['subjects'].split(','))
             dists = set(movie_data['dists'].split(','))
+        if use_nlp_emotions:
+            # TODO: get these from the RDF Graph
+            emotions = set()
 
         with warnings.catch_warnings():
             # hide user warnings about ignoredmissing values, ignoring these values is the desired behaviour
@@ -220,6 +230,8 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
                 series_feat = extract_binary_features(series, all_series)
                 subjects_feat = extract_binary_features(subjects, all_subjects)
                 dists_feat = extract_binary_features(dists, all_dists)
+            if use_nlp_emotions:
+                emotions_feat = extract_binary_features(emotions, ['Happy', 'Sad', 'Surprise', 'Fear', 'Angry'])        # TODO: hardcoded
 
         # Concat all of them into one big feature vector
         item_features[i, 0] = w_rating * rating
@@ -227,8 +239,11 @@ def build_items_feature_vetors(rdf: Graph, save=True) -> (dict, np.array):   # l
         item_features[i, 2: 2 + len(all_genres)] = w_genres * genres_feat
         item_features[i, 2 + len(all_genres): 2 + len(all_genres) + len(all_actors)] = w_actors * actors_feat
         item_features[i, 2 + len(all_genres) + len(all_actors): 2 + len(all_genres) + len(all_actors) + len(all_directors)] = w_directors * directors_feat
+        last = 2 + len(all_genres) + len(all_actors) + len(all_directors)
+        if use_nlp_emotions:
+            item_features[i, last: last + 5] = w_emotions * emotions_feat   # TODO: hardcoded 5
+            last += 5
         if use_wikidata:
-            last = 2 + len(all_genres) + len(all_actors) + len(all_directors)
             item_features[i, last: last + len(all_series)] = w_series * series_feat
             item_features[i, last + len(all_series): last + len(all_series) + len(all_subjects)] = w_subjects * subjects_feat
             item_features[i, last + len(all_series) + len(all_subjects):] = w_distributors * dists_feat
@@ -287,6 +302,9 @@ def build_user_feature_vector(user_ratings: dict, movie_pos: bidict, feature_len
     max_clip = np.ones(item_features.shape[1] - 2)
     weights = [w_genres, w_actors, w_directors]
     lens = [feature_lens['genres'], feature_lens['actors'], feature_lens['directors']]
+    if use_nlp_emotions:
+        weights.append(w_emotions)
+        lens.append(5)
     if use_wikidata:
         weights += [w_series, w_subjects, w_distributors]
         lens += [feature_lens['series'], feature_lens['subjects'], feature_lens['dists']]
@@ -337,7 +355,7 @@ def modify_item_features(item_features: np.array, max_clip):
     return new_item_features
 
 def evaluate(item_features: np.array, movie_pos: bidict, feature_lens: dict, rating_threshold=3.5, top_K=25,
-             limit=500000, use_only_known_ratings=True, print_stats=True, temp=temperature):
+             limit=100000, use_only_known_ratings=True, print_stats=True, temp=temperature):
     """ Depending on use_only_known_ratings we consider all items or only the items the user has rated and hence knows about.
         Limit has to be set to fit all tables in memory.
     """
