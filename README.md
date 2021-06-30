@@ -47,9 +47,9 @@ Then, each time we get called to make recommendations for a user given ratings o
 
 #### IMDb dataset
 
-As our main dataset we used the official IMDb dataset [3], which provides an abundance of features for movies. However, as many of them were not in any obvious way relevant to our task and categorical features (such as actors, writers, cinematographers, etc) do take a lot of space in our vector representations, we opted to keep the subset of them that we deemed most relevant.
+As our main dataset we used the official IMDb dataset [3], which provides an abundance of features for movies. However, as many of them were not in any obvious way relevant to our task and some categorical features (such as actors, writers, cinematographers, etc) do take a lot of space in our vector representations, we opted to keep the subset of them that we deemed most relevant.
 
-For every movie, that had at least some minimum (e.g. 500) of votes (meaning that it was popular enough), the features we decided to keep were the following:
+For every movie, that had at least some minimum (e.g. 500) number of votes (meaning that it was popular enough), the features we decided to keep were the following:
 * The IMDb rating (with number of votes) of the movie
 * Its release year
 * Its genre(s)
@@ -89,7 +89,6 @@ percentage of relevant items in the top k recommendations, for each k from 1 to 
 
 The **MAP@N** is more informative because it takes into account the order in which relevant items were recommended in-between irrelevant items.
 
-A more detailed explaination may be found here: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html 
 
 #### How we applied them
 
@@ -110,12 +109,12 @@ For instance, we found that the distributors feature was not as important (based
 
 ### A simple end-to-end application
 
-In order to experimentally and intuitively verify and test our implementation in an easy and user-friendly manner, we implemented a simple User Interface where a user can insert ratings for however many movies they desire and they will then be presented with a list of movie recommendations from our recommender system.
+In order to experimentally and intuitively verify and test our implementation in an easy and user-friendly manner, we implemented a simple User Interface in an end-to-end web application. There a user can rate however many movies they desire, which they can find by applying a variety of filters and/or sorting each column. Shortly after, they will be presented with a list of movie recommendations from our recommender system, all of which contain links to their respective IMDb page.
 
 #### Technologies used
 * Front-End: **React.js**
 * Back-End: **Flask** (Python framework)
-* The communication betweeen the two is established via a simple **REST API**.
+* The communication betweeen the two is established via a a single REST endpoint using the JSON format.
 
 #### Usage examples
 
