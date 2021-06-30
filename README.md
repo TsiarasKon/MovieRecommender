@@ -43,7 +43,7 @@ Then, each time we get called to make recommendations for a user given ratings o
 4. Finally, we calculate the cosine similarity between the user vector and all the item vectors in the modified item feature matrix (with -1/1 encoding) and sort all movies by descending similarity. Our recommender can simply recommend to the user the top N most similar movies that weren't in his user ratings (i.e. that he hasn't watched yet).
 
 
-### Movie features used
+### Movie features used and data augmentations
 
 #### IMDb dataset
 
@@ -60,7 +60,7 @@ The first two are numerical while the latter three are categorical features with
 
 #### Wikidata data augmentation
 
-Our first approach to data augmentation was to turn to Wikidata [2], which contains a plethora of information for most movies. Locating that information and merging it with what we already had was easily achievable thanks to the inclusion of the IMDb ID field in every Wikidata movie entry. 
+Our first step to data augmentation was to turn to Wikidata [2], which contains a plethora of information for most movies. Locating that information and merging it with what we already had was easily achievable thanks to the inclusion of the IMDb ID field in every Wikidata movie entry. 
 Many of the features that Wikidata provides for every movie expectedly overlapped with our existing features from the IMDb dataset, however the following were deemed useful to augment our dataset with:
 * Movie series
 * Main subject
@@ -71,12 +71,18 @@ These features were obtained by querying the Wikidata API with an appropriate SP
 It should be noted that there while the majority of movies in our IMDB dataset were also found in Wikidata, not all of the features above existed for most of them. Still, we kept as many as we could retrieve given that any additional information we could gather, even for a subset of our movies, can only postively affect our recommender.
 Lastly, it's worth mentioning that Wikidata contained some invalid data (null values in some of our features of interest), which we of course immediately discarded upon receiving the query results.
 
-TODO: 2nd data augmentation (reviews + NLP)
+#### Machine Learning / NLP augmentation
+
+For our 2nd step of data augmentation we opted to use an NLP tool [4] for **Emotion Recognition** on raw text data from reviews on our movies. The most suitable movie reviews dataset we found was [5] containing 50k movie reviews (finding a suitable dataset was not easy as review datasets are mostly geared towards training sentiment analyses models).
+
+Our initial plan was to extract numerical features, one for each emotion said tool recognizes (happy, sad, fear, surprise, angry). However, 50k reviews do not even begin to cover the amount of movies we use in our item feature matrix and there is no obvious default value to use for movies for which we have no reviews. If we use 0.0 then it's assumed those movies have no emotions whatsoever and the cosine similarity between movies with and without reviews is going to increase.
+
+Instead, we opted to turn these numerical features to categorical ones by applying some threshold value (e.g. 0.25, 0.5). This way the presence or not of an emotion is binary and a default value of 0 should hopefully be less impactful if tuned right, although we still expect the cosine similarity (as the cosine of the angle of vectors) between movies with and without reviews to increase. In fact, we believe this is the main reason why this augmentation had little to no effect to our recommender. Conveniently, as with most of our features, we have used a boolean flag to turn it on/off so we can just ignore this augmentation if we so wish (which we do for our next sections).
 
 
 ### Performance Evaluation
 
-When it comes to recommender system evaluation, the typical metrix to use is the RMSE metric between predicted and true user ratings of movies. However, our method does not predict a rating. It rather just sorts movies in a way that the most relevant should be first. Therefore, in order to evaluate the performance of our recommender we turned to metrics that are used primarily in Information Retrieval such as: **recall@N** and **Mean Average Precision MAP@N**, where "@N" signifies the **cut-off** for our recommendations (i.e. use the first N recommendations) [4].
+When it comes to recommender system evaluation, the typical metric to use is the RMSE metric between predicted and true user ratings of movies. However, our method does not predict a rating. It rather just sorts movies in a way that the most relevant should be first. Therefore, in order to evaluate the performance of our recommender we turned to metrics that are used primarily in Information Retrieval such as: **recall@N** and **Mean Average Precision MAP@N**, where "@N" signifies the **cut-off** for our recommendations (i.e. use the first N recommendations) [6].
 
 #### How they work
 
@@ -92,7 +98,7 @@ The **MAP@N** is more informative because it takes into account the order in whi
 
 #### How we applied them
 
-In order to evaluate our recommender system using said metrics we used the **movieLens dataset** [5], which contains 25.000.000 ratings of 162.000 users in 62.000 movies. For practical reason, only a fraction of these were used in our experiments.
+In order to evaluate our recommender system using said metrics we used the **movieLens dataset** [7], which contains 25.000.000 ratings of 162.000 users in 62.000 movies. For practical reason, only a fraction of these were used in our experiments.
 
 We evaluated both metrics for some reasonable values of n (e.g. 15, 25, 50, etc) and for a bunch of different hyperparameter configurations in order to **tune our hyperparameters**. These primarily include the weights of each feature and the *temperature* hyperparameter, but also some other minor boolean flags for optional adjustments. Below are some experiments we wrote down for a cut-off of 25 and a threshold of 3.5.
 
@@ -106,6 +112,7 @@ We evaluated both metrics for some reasonable values of n (e.g. 15, 25, 50, etc)
 
 For instance, we found that the distributors feature was not as important (based on this dataset at least) as lowering its weight improved our metrics significantly. That being said, if we are not planning on using this system for the same kind of users then it is reasonable to change these weights based on our expectations as well. For example, we believe that the series feature should have a big say (perhaps the biggest) on our recommendations as it is our belief that users who rated highly one or more movies that are part of a series (e.g. Star Wars) would probably also want to watch (and therefore would rate highly) other movies in the same series.  
 
+[comment]: <> (It should be mentioned that implemented these metrics was one of the most complicated parts to code.)
 
 ### A simple end-to-end application
 
@@ -149,7 +156,11 @@ Potential future work includes:
 
 [3] IMDb dataset: https://datasets.imdbws.com/
 
-[4] Evaluation Metrics: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html 
+[4] Emotion Detection NLP tool: https://towardsdatascience.com/text2emotion-python-package-to-detect-emotions-from-textual-data-b2e7b7ce1153
 
-[5] MovieLens dataset: https://grouplens.org/datasets/movielens/
+[5] Movie Reviews (raw text) dataset: https://ai.stanford.edu/~amaas/data/sentiment/
+
+[6] Evaluation Metrics: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html 
+
+[7] MovieLens dataset: https://grouplens.org/datasets/movielens/
 
