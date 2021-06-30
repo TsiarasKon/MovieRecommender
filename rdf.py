@@ -1,6 +1,10 @@
+import glob
+import os
+
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import text2emotion as te
 
 from rdflib import Graph, Literal, URIRef, Namespace, XSD
 from wikidata_service import get_all_from_wikidata
@@ -72,6 +76,34 @@ def data_loading():
     print(principals_df)
 
     return movies_df, principals_df
+
+
+def review_data_loading():
+    num_reviews = 20
+    reviews_path = os.path.join("imdb_reviews", "aclImdb", "train")
+    reviews_files = glob.glob(os.path.join(reviews_path, "unsup", "*.txt"))[:num_reviews]
+    reviews_texts = []
+    for r_f in reviews_files:
+        with open(r_f, "r", encoding="utf8") as f:
+            reviews_texts.append(f.readlines()[0])
+
+    reviews_emotions = [te.get_emotion(t) for t in tqdm(reviews_texts)]
+    reviews_tconst = []
+    with open(os.path.join(reviews_path, "urls_unsup.txt"), "r") as f:
+        for line in f:
+            reviews_tconst.append(line.split('/')[4])
+    print([reviews_tconst[int(f.split(os.path.sep)[-1].split('_')[0])] for f in reviews_files])
+    reviews_df = pd.DataFrame({
+        "tconst": [reviews_tconst[int(f.split(os.path.sep)[-1].split('_')[0])] for f in reviews_files],
+        # "text": reviews_texts,
+        "Happy": [e["Happy"] for e in reviews_emotions],
+        "Angry": [e["Angry"] for e in reviews_emotions],
+        "Surprise": [e["Surprise"] for e in reviews_emotions],
+        "Sad": [e["Sad"] for e in reviews_emotions],
+        "Fear": [e["Fear"] for e in reviews_emotions],
+    }).set_index("tconst")
+    print(reviews_df)
+    print(reviews_df.groupby(["tconst"]).mean())
 
 
 def build_and_save_rdf(save=True, limit=None, prune=True):
@@ -205,7 +237,7 @@ def load_rdf():
 
 
 if __name__ == '__main__':
-    only_load = True    # load or build from scratch?
+    only_load = False    # load or build from scratch?
     prune_loaded = False
 
     if only_load:
