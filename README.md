@@ -2,7 +2,7 @@
 
 ### Summary
 
-In this project we build a **content-based recommender system** for movies. In content-based recommendation, it is paramount to find appropriate features for the items at hand (i.e. the movies), based on which we can calculate a reliable similarity metric between them. This is where knowledge bases and knowledge extraction comes in. We build an RDF graph containing all the data from the official IMDb dataset that we deemed most useful and, then, we enrich it with relevant info from other online RDF knowledge bases such as wikidata (https://www.wikidata.org/). Having done that, we are able to use SPARQL in order to query from said knowledge graph all the features we need for our task.
+In this project we build a **content-based recommender system** for movies. In content-based recommendation [1], it is paramount to find appropriate features for the items at hand (i.e. the movies), based on which we can calculate a reliable similarity metric between them. This is where knowledge bases and knowledge extraction comes in. We build an RDF graph containing all the data from the official IMDb dataset that we deemed most useful and, then, we enrich it with relevant info from other online RDF knowledge bases such as wikidata [2]. Having done that, we are able to use SPARQL in order to query from said knowledge graph all the features we need for our task.
 
 ### Content-Based Recommendation
 
@@ -47,34 +47,36 @@ Then, each time we get called to make recommendations for a user given ratings o
 
 #### IMDb dataset
 
-Since the IMDb dataset provides an abundance of features, many of which were not in any obvious way useful to our task, we opted to keep only a subset of them.
+As our main dataset we used the official IMDb dataset [3], which provides an abundance of features for movies. However, as many of them were not in any obvious way relevant to our task and categorical features (such as actors, writers, cinematographers, etc) do take a lot of space in our vector representations, we opted to keep the subset of them that we deemed most relevant.
 
-For every movie, the features we decided to use were the following:
-* IMDb rating (with number of votes)
-* Release Year
-* Genres
-* Actors
-* Directors
+For every movie, that had at least some minimum (e.g. 500) of votes (meaning that it was popular enough), the features we decided to keep were the following:
+* The IMDb rating (with number of votes) of the movie
+* Its release year
+* Its genre(s)
+* Its actor(s)
+* Its director(s)
+
+The first two are numerical while the latter three are categorical features with actors and directors taking up a lot of possible values and, as such, for performance reasons we chose to ignore rare values (e.g. actors and directors that participated in less that 3 movies).
 
 #### Wikidata data augmentation
 
 Our first approach to data augmentation was to turn to Wikidata, which contains a plethora of information for most movies. Locating that information and merging it with what we already had was easily achievable thanks to the inclusion of the IMDb ID field in every Wikidata movie entry. 
-Many of the features that Wikidata provides for every movie expectedly overlapped with our existing features from the IMDb dataset, however the following were deemed useful to augment our dataset:
+Many of the features that Wikidata provides for every movie expectedly overlapped with our existing features from the IMDb dataset, however the following were deemed useful to augment our dataset with:
 * Movie series
 * Main subject
 * Distributors
 
 These features were obtained by querying the Wikidata API with an appropriate SPARQL query, the results of which were then added to our existing RDF graph.
 
-It should be noted that there while the majority of movies in our IMDB dataset was also found in Wikidata, not all of the above features existed for most of them. Still, we kept as many as we could retrieve given that any additional information we could gather, even for a subset of our movies, can only postively affect our recommender.
-Lastly, it's worth mentioning that Wikidata also included some invalid data (null values in some of our features of interest), which we of course immediately discarded upon receiving the query results.
+It should be noted that there while the majority of movies in our IMDB dataset were also found in Wikidata, not all of the features above existed for most of them. Still, we kept as many as we could retrieve given that any additional information we could gather, even for a subset of our movies, can only postively affect our recommender.
+Lastly, it's worth mentioning that Wikidata contained some invalid data (null values in some of our features of interest), which we of course immediately discarded upon receiving the query results.
 
 TODO: 2nd data augmentation (reviews + NLP)
 
 
 ### Performance Evaluation
 
-When it comes to recommender system evaluation, the typical metrix to use is the RMSE metric between predicted and true user ratings of movies. However, our method does not predict a rating. It rather just sorts movies in a way that the most relevant should be first. Therefore, in order to evaluate the performance of our recommender we turned to metrics that are used primarily in Information Retrieval such as: **recall@N** and **Mean Average Precision MAP@N**, where "@N" signifies the **cut-off** for our recommendations (i.e. use the first N recommendations).
+When it comes to recommender system evaluation, the typical metrix to use is the RMSE metric between predicted and true user ratings of movies. However, our method does not predict a rating. It rather just sorts movies in a way that the most relevant should be first. Therefore, in order to evaluate the performance of our recommender we turned to metrics that are used primarily in Information Retrieval such as: **recall@N** and **Mean Average Precision MAP@N**, where "@N" signifies the **cut-off** for our recommendations (i.e. use the first N recommendations) [4].
 
 #### How they work
 
@@ -91,7 +93,7 @@ A more detailed explaination may be found here: http://sdsawtelle.github.io/blog
 
 #### How we applied them
 
-In order to evaluate our recommender system using said metrics we used the **movieLens dataset** (https://grouplens.org/datasets/movielens/), which contains 25.000.000 ratings of 162.000 users in 62.000 movies. For practical reason, only a fraction of these were used in our experiments.
+In order to evaluate our recommender system using said metrics we used the **movieLens dataset** [5], which contains 25.000.000 ratings of 162.000 users in 62.000 movies. For practical reason, only a fraction of these were used in our experiments.
 
 We evaluated both metrics for some reasonable values of n (e.g. 15, 25, 50, etc) and for a bunch of different hyperparameter configurations in order to **tune our hyperparameters**. These primarily include the weights of each feature and the *temperature* hyperparameter, but also some other minor boolean flags for optional adjustments. Below are some experiments we wrote down for a cut-off of 25 and a threshold of 3.5.
 
@@ -139,3 +141,16 @@ In this last example, our user has simply provided a high rating for 3 movies st
 Potential future work includes:
 * Using **Locality Sensitive Hashing (LSH)** in order to speed up the cosine similarity calculation. With LSH we would not be calculating the similarity between the user vector and *all* the item vectors but only with some item vectors that are expected to probably be more similar to the user's vector.
 * Adding more features that may be relevant.
+
+### References 
+
+[1] Recommendation Systems: http://infolab.stanford.edu/~ullman/mmds/ch9.pdf
+
+[2] Wikidata: https://www.wikidata.org/
+
+[2] IMDb dataset: https://datasets.imdbws.com/
+
+[3] Evaluation Metrics: http://sdsawtelle.github.io/blog/output/mean-average-precision-MAP-for-recommender-systems.html 
+
+[4] MovieLens dataset: https://grouplens.org/datasets/movielens/
+
