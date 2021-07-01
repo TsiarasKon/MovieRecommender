@@ -148,6 +148,13 @@ Potential future work includes:
 * Using **Locality Sensitive Hashing (LSH)** in order to speed up the cosine similarity calculation. With LSH we would not be calculating the similarity between the user vector and *all* the item vectors but only with some item vectors that are expected to probably be more similar to the user's vector.
 * Adding more features that may be relevant.
 
+
+### Licensing
+
+This repository is licensed under GPL v.3.0. You may modify the code and distribute it however you want, as long as you keep it under the same license.  
+
+The datasets [3][5][7] we used are free only for **non-commerical** use. If you wish to use these datasets commercially for any purpose please contact their respective owners.
+
 ### References 
 
 [1] Recommendation Systems: http://infolab.stanford.edu/~ullman/mmds/ch9.pdf
